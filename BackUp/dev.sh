@@ -18,6 +18,32 @@ handle_error() {
     exit 1
 }
 
+# Check if we're in the right directory
+if [ ! -f "package.json" ] || [ ! -f "docker-compose.yml" ] || [ ! -d "backend" ]; then
+    handle_error "This script must be run from the project root directory (where package.json, docker-compose.yml, and backend/ are located)"
+fi
+
+echo -e "${YELLOW}📍 Running development setup from: $(pwd)${NC}"
+echo
+
+# Check prerequisites
+echo -e "${YELLOW}🔍 Checking prerequisites...${NC}"
+
+if ! command -v docker &> /dev/null; then
+    handle_error "Docker is not installed. Please install Docker Desktop first."
+fi
+
+if ! command -v node &> /dev/null; then
+    handle_error "Node.js is not installed. Please install Node.js 18+ first."
+fi
+
+if ! command -v npm &> /dev/null; then
+    handle_error "npm is not available. Please install Node.js with npm included."
+fi
+
+echo -e "${GREEN}✅ Prerequisites check passed${NC}"
+echo
+
 # Check if this is first run
 if [ ! -d "backend/node_modules" ]; then
     echo -e "${YELLOW}📦 First run detected - installing dependencies...${NC}"
@@ -68,9 +94,12 @@ done
 echo
 echo -e "${YELLOW}🗄️ Setting up database schema...${NC}"
 cd backend
-npm run db:generate >/dev/null 2>&1
-npm run db:push >/dev/null 2>&1
+npm run db:generate >/dev/null 2>&1 || handle_error "Failed to generate Prisma client"
+npm run db:push >/dev/null 2>&1 || handle_error "Failed to push database schema"
 cd ..
+
+echo -e "${GREEN}✅ Database setup complete${NC}"
+echo
 
 echo -e "${YELLOW}🔧 Starting backend server...${NC}"
 echo -e "${BLUE}📊 Backend: http://localhost:3001${NC}"
