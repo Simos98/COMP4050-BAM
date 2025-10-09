@@ -1,0 +1,59 @@
+{
+  "compilerOptions": {
+    // === Target and Module ===
+    "target": "ES2020",                    // What JavaScript version to output
+    "module": "commonjs",                  // How to handle imports/exports
+    "lib": ["ES2020"],                     // What built-in APIs are available
+    
+    // === Output Configuration ===
+    "outDir": "./dist",                    // Where compiled JS files go
+    "rootDir": "./",                    // Where TypeScript source files are
+    "removeComments": true,                // Remove comments from compiled JS
+    
+    // === Module Resolution ===
+    "moduleResolution": "node",            // Use Node.js module resolution
+    "baseUrl": "./src",                    // Base directory for imports
+    "paths": {                             // Path shortcuts (like aliases)
+      "@/*": ["*"],
+      "@controllers/*": ["controllers/*"],
+      "@services/*": ["services/*"],
+      "@middleware/*": ["middleware/*"],
+      "@routes/*": ["routes/*"],
+      "@types/*": ["types/*"],
+      "@utils/*": ["utils/*"]
+    },
+    
+    // === Type Checking (Strict Mode) ===
+    "strict": true,                        // Enable all strict type checking
+    "noImplicitAny": true,                // Error on variables without types
+    "strictNullChecks": true,             // null and undefined are separate types
+    "strictFunctionTypes": true,          // Strict checking of function types
+    "noImplicitReturns": true,            // Error if function doesn't return
+    "noFallthroughCasesInSwitch": true,   // Error on switch fallthrough
+    
+    // === Emit Configuration ===
+    "declaration": true,                   // Generate .d.ts files
+    "declarationMap": true,               // Generate source maps for .d.ts
+    "sourceMap": true,                    // Generate source maps for debugging
+    
+    // === Interop and Compatibility ===
+    "esModuleInterop": true,              // Better compatibility with CommonJS
+    "allowSyntheticDefaultImports": true, // Allow default imports from modules
+    "forceConsistentCasingInFileNames": true, // Enforce consistent file naming
+    
+    // === Advanced Options ===
+    "skipLibCheck": true,                 // Skip type checking of library files
+    "resolveJsonModule": true,             // Allow importing JSON files
+
+    "types": ["node"] 
+  },
+  "include": [
+    "src/**/*",                            // Include src folder
+    "prisma/**/*",                         // ← Add this line
+    "tests/**/*"                           // ← Add this line
+  ],
+  "exclude": [
+    "node_modules",                       // Don't compile dependencies
+    "dist",                              // Don't compile output folder
+  ]
+}

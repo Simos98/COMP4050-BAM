@@ -1,0 +1,42 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Push to database with: npx prismaa db push
+// Generate Prisma client with: npx prisma generate
+// View through web interface with: npx prisma studio
+// Web Based PostgreSQL Manager: docker-compose up -d pgadmin
+    // Access: http://localhost:5050
+    // Login : admin@comp4050.com
+    // Password: admin123
+
+generator client {
+  provider = "prisma-client-js"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id        String   @id @default(cuid())        // Primary key (auto-generated)
+  studentId String   @unique @map("student_id")  // Student ID (must be unique)
+  email     String   @unique                     // Email (must be unique)
+  password  String                               // Hashed password
+  role      UserRole @default(STUDENT)           // User role (enum)
+  firstName String   @map("first_name")          // First name
+  lastName  String   @map("last_name")           // Last name
+  
+  // Automatic timestamps
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@map("users") // Table name in database will be "users"
+}
+
+enum UserRole {
+  STUDENT
+  TEACHER
+  ADMIN
+}
