@@ -1,0 +1,58 @@
+version: '3.8'
+
+services:
+  # PostgreSQL Database
+  postgres:
+    image: postgres:15-alpine
+    container_name: comp4050-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: comp4050_db
+      POSTGRES_USER: comp4050_user
+      POSTGRES_PASSWORD: comp4050_secure_password
+      TZ: Australia/Sydney
+    ports:
+      - "5432:5432"
+    volumes:
+      # Persist database data
+      - postgres_data:/var/lib/postgresql/data
+      # Optional: Add initialization scripts
+      - ./database/init:/docker-entrypoint-initdb.d
+    networks:
+      - comp4050_network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U comp4050_user -d comp4050_db"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Optional: pgAdmin for database management (web interface)
+  pgadmin:
+    image: dpage/pgadmin4:latest
+    container_name: comp4050-pgadmin
+    restart: unless-stopped
+    environment:
+      PGADMIN_DEFAULT_EMAIL: admin@comp4050.com
+      PGADMIN_DEFAULT_PASSWORD: admin123
+      PGADMIN_CONFIG_SERVER_MODE: 'False'
+    ports:
+      - "5050:80"
+    volumes:
+      - pgadmin_data:/var/lib/pgadmin
+    networks:
+      - comp4050_network
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+# Named volumes for data persistence
+volumes:
+  postgres_data:
+    driver: local
+  pgadmin_data:
+    driver: local
+
+# Network for service communication
+networks:
+  comp4050_network:
+    driver: bridge

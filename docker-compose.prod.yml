@@ -1,0 +1,47 @@
+services:
+  # Backend Application
+  backend:
+    build: 
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: comp4050-backend-prod
+    restart: unless-stopped
+    environment:
+      NODE_ENV: production
+      DATABASE_URL: postgresql://comp4050_user:${POSTGRES_PASSWORD}@postgres:5432/comp4050_db
+      JWT_SECRET: ${JWT_SECRET}
+    ports:
+      - "3001:3001"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - comp4050_network
+
+  # PostgreSQL Database (same as development)
+  postgres:
+    image: postgres:15-alpine
+    container_name: comp4050-postgres-prod
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: comp4050_db
+      POSTGRES_USER: comp4050_user
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_prod_data:/var/lib/postgresql/data
+    networks:
+      - comp4050_network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U comp4050_user -d comp4050_db"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+volumes:
+  postgres_prod_data:
+
+networks:
+  comp4050_network:
+    driver: bridge

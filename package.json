@@ -1,0 +1,35 @@
+{
+  "name": "comp4050-bam",
+  "version": "1.0.0",
+  "description": "COMP4050 BAM Project - Full Stack Application",
+  "private": true,
+  "scripts": {
+    "dev": "npm run dev:check || npm run dev:setup",
+    "dev:check": "npm run deps:check && npm run db:check && npm run backend:dev",
+    "dev:setup": "npm run setup && npm run backend:dev",
+    "dev:full": "npm run dev:check || npm run dev:setup:full",
+    "dev:setup:full": "npm run setup && concurrently \"npm run backend:dev\" \"npm run frontend:dev\"",
+    
+    "setup": "npm run deps:install && npm run db:start && npm run backend:db:setup",
+    "setup:fresh": "npm run clean && npm run setup",
+    
+    "deps:check": "node scripts/check-deps.js",
+    "deps:install": "npm run backend:install && npm run frontend:install",
+    
+    "db:check": "docker-compose ps postgres | grep -q healthy",
+    "db:start": "docker-compose up -d postgres && npm run db:wait",
+    "db:wait": "node scripts/wait-for-db.js",
+    
+    "backend:install": "cd backend && npm install",
+    "backend:dev": "cd backend && npm run dev",
+    "backend:db:setup": "cd backend && npm run db:generate && npm run db:push",
+    
+    "frontend:install": "cd frontend && npm install",
+    "frontend:dev": "cd frontend && npm run dev",
+    
+    "clean": "docker-compose down -v && rm -rf backend/node_modules frontend/node_modules"
+  },
+  "devDependencies": {
+    "concurrently": "^8.2.0"
+  }
+}
