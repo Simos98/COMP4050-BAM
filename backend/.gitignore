@@ -1,7 +1,8 @@
+# Dependencies
 node_modules/
 
-# Prisma
-/src/generated/prisma
+# Prisma generated client (regenerated on each environment)
+/src/generated/
 
 # Build outputs
 dist/
@@ -9,7 +10,7 @@ dist/
 *.js.map
 *.d.ts
 *.d.ts.map
-# But keep configuration files
+# Except config files
 !*.config.js
 
 # Logs
@@ -18,4 +19,3 @@ npm-debug.log*
 
 # Testing
 coverage/
-.nyc_output/
