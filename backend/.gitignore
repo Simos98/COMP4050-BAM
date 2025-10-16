@@ -1,3 +1,20 @@
 node_modules
 
-/src/generated/prisma
+# Prisma generated client (regenerated on each environment)
+/src/generated/
+
+# Build outputs
+dist/
+*.js
+*.js.map
+*.d.ts
+*.d.ts.map
+# Except config files
+!*.config.js
+
+# Logs
+*.log
+npm-debug.log*
+
+# Testing
+coverage/
