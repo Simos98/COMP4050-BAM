@@ -1,5 +1,21 @@
-node_modules
-# Keep environment variables out of version control
-.env
+node_modules/
 
+# Prisma
 /src/generated/prisma
+
+# Build outputs
+dist/
+*.js
+*.js.map
+*.d.ts
+*.d.ts.map
+# But keep configuration files
+!*.config.js
+
+# Logs
+*.log
+npm-debug.log*
+
+# Testing
+coverage/
+.nyc_output/
