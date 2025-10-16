@@ -81,7 +81,6 @@ export default function App() {
 +            <Route path="*" element={<Navigate to={user ? "/home" : "/login"} replace />} />
             <Route path="/login" element={<Login />} />
             <Route path="/unauthorized" element={<Unauthorized />} />
-
             {/* Protected pages */}
             <Route path="/home" element={<RequireAuth><Home /></RequireAuth>} />
             <Route path="/bookings" element={<RequireAuth><Bookings /></RequireAuth>} />
