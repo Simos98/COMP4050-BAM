@@ -4,6 +4,8 @@ import type { ColumnsType } from 'antd/es/table'
 import dayjs, { Dayjs } from 'dayjs'
 import type { Booking, BookingStatus } from '../types'
 import { listBookings, createBooking, updateBookingStatus, deleteBooking } from '../services/bookings'
+import { listDevices } from '../services/devices'
+import type { Device } from '../services/devices'
 import { useAuth } from '../context/AuthContext'
 
 const { RangePicker } = DatePicker
@@ -17,7 +19,9 @@ const STATUS_COLORS: Record<BookingStatus, string> = {
 
 export default function Bookings() {
   const { user } = useAuth()
+  const isAdmin = user?.role === 'admin'
   const [data, setData] = useState<Booking[]>([])
+  const [devices, setDevices] = useState<Device[]>([])
   const [loading, setLoading] = useState(false)
   const [open, setOpen] = useState(false)
 
@@ -26,10 +30,11 @@ export default function Bookings() {
   const load = async () => {
     setLoading(true)
     try {
-      const rows = await listBookings()
+      const [rows, devs] = await Promise.all([listBookings(), listDevices()])
       setData(rows)
+      setDevices(devs)
     } catch (e) {
-      message.error('Failed to load bookings')
+      message.error('Failed to load bookings or devices')
     } finally {
       setLoading(false)
     }
@@ -75,11 +80,20 @@ export default function Bookings() {
     }
   }
 
+  // show all bookings to admin, otherwise only bookings made by the logged-in user
+  const visibleData = useMemo(() => {
+    if (isAdmin) return data
+    if (!user) return []
+    return data.filter(b => b.user === user.email)
+  }, [data, user, isAdmin])
+
   const columns = useMemo<ColumnsType<Booking>>(() => [
     { title: 'User', dataIndex: 'user', key: 'user' },
-    { title: 'Device', dataIndex: 'deviceId', key: 'deviceId', filters: [
-        { text: 'B-001', value: 'B-001' }, { text: 'B-002', value: 'B-002' }, { text: 'B-003', value: 'B-003' }
-      ],
+    {
+      title: 'Device',
+      dataIndex: 'deviceId',
+      key: 'deviceId',
+      filters: devices.map(d => ({ text: `${d.deviceId} (${d.lab})`, value: d.deviceId })),
       onFilter: (val, record) => record.deviceId === val
     },
     { title: 'Start', dataIndex: 'start', key: 'start', render: (v) => dayjs(v).format('YYYY-MM-DD HH:mm') },
@@ -97,24 +111,40 @@ export default function Bookings() {
     {
       title: 'Actions',
       key: 'actions',
-      render: (_, record) => (
-        <Space>
-          <Button size="small" onClick={() => handleStatus(record.id, 'approved')} disabled={record.status==='approved'}>
-            Approve
-          </Button>
-          <Button size="small" danger onClick={() => handleStatus(record.id, 'rejected')} disabled={record.status==='rejected'}>
-            Reject
-          </Button>
-          <Button size="small" onClick={() => handleStatus(record.id, 'cancelled')} disabled={record.status==='cancelled'}>
-            Cancel
-          </Button>
-          <Popconfirm title="Delete booking?" onConfirm={() => handleDelete(record.id)}>
-            <Button size="small" danger type="text">Delete</Button>
-          </Popconfirm>
-        </Space>
-      )
+      render: (_, record) => {
+        const isOwner = user && record.user === user.email
+        const canCancel = (isAdmin || isOwner) && record.status !== 'cancelled'
+        // Admins: full controls. Non-admins: only Cancel on their own bookings.
+        return (
+          <Space>
+            {isAdmin ? (
+              <>
+                <Button size="small" onClick={() => handleStatus(record.id, 'approved')} disabled={record.status === 'approved'}>
+                  Approve
+                </Button>
+                <Button size="small" danger onClick={() => handleStatus(record.id, 'rejected')} disabled={record.status === 'rejected'}>
+                  Reject
+                </Button>
+                <Button size="small" onClick={() => handleStatus(record.id, 'cancelled')} disabled={record.status === 'cancelled'}>
+                  Cancel
+                </Button>
+                <Popconfirm title="Delete booking?" onConfirm={() => handleDelete(record.id)}>
+                  <Button size="small" danger type="text">Delete</Button>
+                </Popconfirm>
+              </>
+            ) : (
+              // non-admin
+              <>
+                <Button size="small" onClick={() => handleStatus(record.id, 'cancelled')} disabled={!canCancel}>
+                  Cancel
+                </Button>
+              </>
+            )}
+          </Space>
+        )
+      }
     }
-  ], [])
+  ], [devices, user, isAdmin])
 
   return (
     <Card
@@ -125,7 +155,7 @@ export default function Bookings() {
         rowKey="id"
         loading={loading}
         columns={columns}
-        dataSource={data}
+        dataSource={visibleData}
         pagination={{ pageSize: 8, showSizeChanger: false }}
       />
 
@@ -140,17 +170,13 @@ export default function Bookings() {
           user: user?.email || '',
         }}>
           <Form.Item label="User Email" name="user" rules={[{ required: true, type: 'email' }]}>
-            <Input placeholder="student@school.edu" />
+            <Input placeholder="student@school.edu" disabled={!isAdmin} />
           </Form.Item>
 
           <Form.Item label="Device" name="deviceId" rules={[{ required: true }]}>
             <Select
               placeholder="Select device"
-              options={[
-                { label: 'B-001 (Lab 1)', value: 'B-001' },
-                { label: 'B-002 (Lab 2)', value: 'B-002' },
-                { label: 'B-003 (Lab 3)', value: 'B-003' },
-              ]}
+              options={devices.map(d => ({ label: `${d.deviceId} (${d.lab})`, value: d.deviceId }))}
             />
           </Form.Item>
 
