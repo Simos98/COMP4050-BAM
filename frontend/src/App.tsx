@@ -1,5 +1,5 @@
 import { Layout, Menu, Button } from 'antd'
-import { Link, Routes, Route, useLocation } from 'react-router-dom'
+import { Link, Routes, Route, Navigate, useLocation } from 'react-router-dom'
 import {
   DashboardOutlined,
   CalendarOutlined,
@@ -24,7 +24,7 @@ export default function App() {
   const location = useLocation()
 
   const pathToKey: Record<string, string> = {
-    '/': 'dashboard',
+    '/home': 'dashboard',
     '/bookings': 'bookings',
     '/devices': 'devices',
     '/admin': 'admin',
@@ -33,19 +33,21 @@ export default function App() {
   }
   const selectedKey = pathToKey[location.pathname] ?? 'dashboard'
 
-  const menuItems = [
-    { key: 'dashboard', icon: <DashboardOutlined />, label: <Link to="/">Dashboard</Link> },
-    ...(user
-      ? [
-          { key: 'bookings', icon: <CalendarOutlined />, label: <Link to="/bookings">Bookings</Link> },
-          { key: 'devices', icon: <ExperimentOutlined />, label: <Link to="/devices">Devices</Link> },
-          // show Admin only if role === 'admin'
-          ...(user.role === 'admin'
-            ? [{ key: 'admin', icon: <SettingOutlined />, label: <Link to="/admin">Admin</Link> }]
-            : []),
-        ]
-      : [{ key: 'login', icon: <LoginOutlined />, label: <Link to="/login">Login</Link> }]),
-  ]
+  const menuItems = user
+    ? [
+        // show Dashboard only when logged in
+        { key: 'dashboard', icon: <DashboardOutlined />, label: <Link to="/home">Dashboard</Link> },
+        { key: 'bookings', icon: <CalendarOutlined />, label: <Link to="/bookings">Bookings</Link> },
+        { key: 'devices', icon: <ExperimentOutlined />, label: <Link to="/devices">Devices</Link> },
+        // show Admin only if role === 'admin'
+        ...(user.role === 'admin'
+          ? [{ key: 'admin', icon: <SettingOutlined />, label: <Link to="/admin">Admin</Link> }]
+          : []),
+      ]
+    : [
+        // show Login when not logged in
+        { key: 'login', icon: <LoginOutlined />, label: <Link to="/login">Login</Link> },
+      ]
 
   return (
     <Layout style={{ minHeight: '100vh' }}>
@@ -72,14 +74,22 @@ export default function App() {
 
         <Content style={{ margin: 24 }}>
           <Routes>
-            <Route path="/" element={<Home />} />
+
++            {/* default root -> home if logged in, otherwise login */}
++            <Route path="/" element={<Navigate to={user ? "/home" : "/login"} replace />} />
++            {/* unknown -> home when logged in else login */}
++            <Route path="*" element={<Navigate to={user ? "/home" : "/login"} replace />} />
             <Route path="/login" element={<Login />} />
             <Route path="/unauthorized" element={<Unauthorized />} />
 
             {/* Protected pages */}
+            <Route path="/home" element={<RequireAuth><Home /></RequireAuth>} />
             <Route path="/bookings" element={<RequireAuth><Bookings /></RequireAuth>} />
             <Route path="/devices"  element={<RequireAuth><Devices /></RequireAuth>} />
             <Route path="/admin"    element={<RequireRole role="admin"><Admin /></RequireRole>} />
+
+            {/* unknown -> login */}
+            <Route path="*" element={<Navigate to="/login" replace />} />
           </Routes>
         </Content>
       </Layout>
