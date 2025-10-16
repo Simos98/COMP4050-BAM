@@ -7,6 +7,7 @@ import { listBookings, createBooking, updateBookingStatus, deleteBooking } from 
 import { listDevices } from '../services/devices'
 import type { Device } from '../services/devices'
 import { useAuth } from '../context/AuthContext'
+import { useNavigate } from 'react-router-dom' // added
 
 const { RangePicker } = DatePicker
 
@@ -24,6 +25,7 @@ export default function Bookings() {
   const [devices, setDevices] = useState<Device[]>([])
   const [loading, setLoading] = useState(false)
   const [open, setOpen] = useState(false)
+  const navigate = useNavigate() // added
 
   const [form] = Form.useForm()
 
@@ -116,7 +118,7 @@ export default function Bookings() {
         const canCancel = (isAdmin || isOwner) && record.status !== 'cancelled'
         // Admins: full controls. Non-admins: only Cancel on their own bookings.
         return (
-          <Space>
+          <Space onClick={e => e.stopPropagation() /* prevent row click when pressing buttons */}>
             {isAdmin ? (
               <>
                 <Button size="small" onClick={() => handleStatus(record.id, 'approved')} disabled={record.status === 'approved'}>
@@ -133,7 +135,6 @@ export default function Bookings() {
                 </Popconfirm>
               </>
             ) : (
-              // non-admin
               <>
                 <Button size="small" onClick={() => handleStatus(record.id, 'cancelled')} disabled={!canCancel}>
                   Cancel
@@ -157,6 +158,10 @@ export default function Bookings() {
         columns={columns}
         dataSource={visibleData}
         pagination={{ pageSize: 8, showSizeChanger: false }}
+        onRow={(record) => ({
+          onClick: () => navigate(`/bookings/${record.id}`),
+          style: { cursor: 'pointer' }
+        })}
       />
 
       <Modal
