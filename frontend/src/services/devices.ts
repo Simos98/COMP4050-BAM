@@ -1,3 +1,5 @@
+import { getUserFromToken } from './mockAuth'
+
 export type Device = {
   id: string // internal uuid
   deviceId: string // visible device id, e.g. "B-001"
@@ -23,7 +25,7 @@ function readStore(): Device[] {
   try {
     const raw = localStorage.getItem(KEY)
     if (!raw) return []
-    return JSON.parse(raw)
+    return JSON.parse(raw) as Device[]
   } catch {
     return []
   }
@@ -43,10 +45,14 @@ export async function listDevices(): Promise<Device[]> {
 }
 
 export async function createDevice(payload: { deviceId: string; lab: string }): Promise<Device> {
-  await delay(180)
+  await delay()
+  const user = getUserFromToken()
+  if (!user) { const e: any = new Error('Unauthorized'); e.status = 401; throw e }
+  if (user.role !== 'admin') { const e: any = new Error('Forbidden'); e.status = 403; throw e }
+
   const devices = readStore()
   if (devices.find(d => d.deviceId === payload.deviceId)) {
-    throw new Error('Device ID already exists')
+    const e: any = new Error('Device exists'); e.status = 409; throw e
   }
   const device: Device = {
     id: crypto.randomUUID(),

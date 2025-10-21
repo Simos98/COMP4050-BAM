@@ -13,20 +13,16 @@ export default function Login() {
 
   const onFinish = async (values: any) => {
     try {
-      // MOCK: assign role by email for testing
-      const role = String(values.email).toLowerCase().includes('admin') ? 'admin' : 'user'
-      const mockUser = { name: 'Test User', email: values.email, role } as const
-
-      // Real flow later:
-      // const res = await loginRequest(values.email, values.password)
-      // login(res.data.user)
-
-      login(mockUser as any)
-      message.success(`Logged in as ${role}`)
+      // Call AuthContext.login(email, password) which uses mockAuth.login currently
+      await login(values.email, values.password)
+      // login succeeded, restore current user from AuthContext
+      message.success('Logged in')
       navigate(from, { replace: true })
     } catch (err: any) {
       console.error(err)
-      message.error('Invalid credentials or server error.')
+      // show better message when mockAuth returns a status
+      if (err?.status === 401) message.error('Invalid email or password')
+      else message.error(err?.message || 'Invalid credentials or server error.')
     }
   }
 

@@ -1,44 +1,44 @@
-import { createContext, useState, useContext, ReactNode } from 'react'
+import React, { createContext, useContext, useEffect, useState } from 'react'
+import { login as mockLogin, logout as mockLogout, me as mockMe } from '../services/mockAuth'
 
-type User = {
-  name: string
-  email: string
-  role: 'admin' | 'user'
-  token?: string
-}
+type User = { id: string; name?: string; email: string; role: string } | null
 
-type AuthContextType = {
-  user: User | null
-  login: (userData: User) => void
+type AuthContextValue = {
+  user: User
+  login: (email: string, password: string) => Promise<void>
   logout: () => void
 }
 
-const AuthContext = createContext<AuthContextType | null>(null)
+const AuthContext = createContext<AuthContextValue | undefined>(undefined)
 
-export const AuthProvider = ({ children }: { children: ReactNode }) => {
-  const [user, setUser] = useState<User | null>(() => {
-    const stored = localStorage.getItem('user')
-    return stored ? JSON.parse(stored) : null
-  })
+export function AuthProvider({ children }: { children: React.ReactNode }) {
+  const [user, setUser] = useState<User>(null)
 
-  const login = (userData: User) => {
-    setUser(userData)
-    localStorage.setItem('user', JSON.stringify(userData))
+  useEffect(() => {
+    // restore from token (mock)
+    const payload = mockMe()
+    if (payload) {
+      // mockMe returns minimal info (id,email,role)
+      setUser({ id: payload.id, email: payload.email, role: payload.role })
+    } else {
+      setUser(null)
+    }
+  }, [])
+
+  async function login(email: string, password: string) {
+    const res = await mockLogin(email, password)
+    setUser({ id: res.user.id, name: res.user.name, email: res.user.email, role: res.user.role })
   }
 
-  const logout = () => {
+  function logout() {
+    mockLogout()
     setUser(null)
-    localStorage.removeItem('user')
   }
 
-  return (
-    <AuthContext.Provider value={{ user, login, logout }}>
-      {children}
-    </AuthContext.Provider>
-  )
+  return <AuthContext.Provider value={{ user, login, logout }}>{children}</AuthContext.Provider>
 }
 
-export const useAuth = () => {
+export function useAuth() {
   const ctx = useContext(AuthContext)
   if (!ctx) throw new Error('useAuth must be used inside AuthProvider')
   return ctx
