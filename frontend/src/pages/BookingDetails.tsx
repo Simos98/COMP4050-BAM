@@ -21,26 +21,25 @@ export default function BookingDetails() {
   const [camState, setCamState] = useState<CameraState | null>(null)
   const [busy, setBusy] = useState(false)
   const [allowedToView, setAllowedToView] = useState(false)
+  const [errorMessage, setErrorMessage] = useState<string | null>(null)
 
   useEffect(() => {
     if (!id) return
     let mounted = true
     const load = async () => {
       setLoading(true)
+      setErrorMessage(null)
       try {
         const b = await getBooking(id)
         if (!mounted) return
         setBooking(b)
 
-        // load device and verify ip/port are configured
         const device = await getDevice(b.deviceId)
         const deviceOk = !!(device && device.ip && device.port)
-        setAllowedToView(Boolean(deviceOk && (user?.role === 'admin' || b.status === 'approved')))
-        if (!deviceOk) {
-          // device not configured -> do not attempt preview
-          setImgUrl(null)
-          setCamState(null)
-        } else if (user?.role === 'admin' || b.status === 'approved') {
+        const canView = deviceOk && (user?.role === 'admin' || b.status === 'approved')
+        setAllowedToView(Boolean(canView))
+
+        if (deviceOk && canView) {
           const p = await getPreview(b.deviceId)
           if (!mounted) return
           setImgUrl(p.url)
@@ -52,11 +51,11 @@ export default function BookingDetails() {
       } catch (err: any) {
         console.error(err)
         if (err?.status === 403 || err?.status === 401) {
-          message.error('Not authorized to view this booking')
-          navigate('/bookings')
+          setErrorMessage('Not authorized to view this booking.')
+        } else if (err?.status === 404) {
+          setErrorMessage('Booking or device not found.')
         } else {
-          message.error('Booking not found')
-          navigate('/bookings')
+          setErrorMessage(err?.message || 'Unexpected error loading booking.')
         }
       } finally {
         if (mounted) setLoading(false)
@@ -86,6 +85,7 @@ export default function BookingDetails() {
   }
 
   if (loading) return <div style={{display:'flex', justifyContent:'center', padding:40}}><Spin size="large" /></div>
+  if (errorMessage) return <div style={{ padding: 24 }}><Alert type="error" message="Error" description={errorMessage} /></div>
   if (!booking) return null
 
   const canControl = Boolean(user) && allowedToView

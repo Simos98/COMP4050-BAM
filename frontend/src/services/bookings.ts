@@ -1,5 +1,5 @@
 import dayjs from 'dayjs'
-import { getUserFromToken } from './mockAuth'
+import { getUserFromToken, getUserByEmail } from './mockAuth'
 import { getDevice } from './devices'
 import type { Booking, BookingStatus } from '../types'
 
@@ -67,9 +67,6 @@ export async function getBooking(id: string): Promise<Booking> {
   if (user.role !== 'admin' && b.user !== user.email) {
     const e: any = new Error('Forbidden'); e.status = 403; throw e
   }
-
-  // optionally: ensure device still configured when returning booking for viewing
-  // (booking view components will also check device config before allowing camera preview)
   return b
 }
 
@@ -80,12 +77,30 @@ export async function createBooking(
   const user = getUserFromToken()
   if (!user) { const e: any = new Error('Unauthorized'); e.status = 401; throw e }
 
-  // if non-admin tries to create for someone else, forbid
-  const ownerEmail = input.user || user.email
-  if (ownerEmail !== user.email && user.role !== 'admin') {
-    const e: any = new Error('Forbidden')
-    e.status = 403
-    throw e
+  // determine owner email (explicit or default to current user)
+  const ownerEmail = (input as any).user ? String((input as any).user).toLowerCase() : user.email.toLowerCase()
+
+  // RBAC:
+  // - admin: allowed for anyone
+  // - teacher: allowed for self OR for users that are students
+  // - student: allowed only for self
+  if (user.role === 'admin') {
+    // admin allowed for any ownerEmail
+  } else if (user.role === 'teacher') {
+    if (ownerEmail !== user.email.toLowerCase()) {
+      // must target an existing student
+      const target = getUserByEmail(ownerEmail)
+      if (!target) {
+        const e: any = new Error('Target user not found'); e.status = 404; throw e
+      }
+      if (target.role !== 'student') {
+        const e: any = new Error('Teachers may only create bookings for students'); e.status = 403; throw e
+      }
+    }
+  } else { // student
+    if (ownerEmail !== user.email.toLowerCase()) {
+      const e: any = new Error('Students can only create bookings for themselves'); e.status = 403; throw e
+    }
   }
 
   // basic validation

@@ -42,9 +42,7 @@ export async function login(email: string, password: string) {
   return { user, token }
 }
 
-export function logout() {
-  localStorage.removeItem(TOKEN_KEY)
-}
+export function logout() { localStorage.removeItem(TOKEN_KEY) }
 
 export function me() {
   const token = localStorage.getItem(TOKEN_KEY)
@@ -54,7 +52,6 @@ export function me() {
     localStorage.removeItem(TOKEN_KEY)
     return null
   }
-  // return user-like object (id,email,role)
   return { id: payload.id, email: payload.email, role: payload.role }
 }
 
@@ -65,4 +62,23 @@ export function getUserFromToken(): AuthUser | null {
   if (!found) return null
   const { password: _, ...user } = found
   return user
+}
+
+// New helper: lookup user by email (returns null if unknown)
+export function getUserByEmail(email: string): AuthUser | null {
+  if (!email) return null
+  const found = USERS.find(u => u.email.toLowerCase() === String(email).toLowerCase())
+  if (!found) return null
+  const { password: _, ...user } = found
+  return user
+}
+
+// New helper: list all users (without passwords)
+export function listUsers(): AuthUser[] {
+  return USERS.map(({ password, ...u }) => ({ ...u }))
+}
+
+// New helper: list only students
+export function listStudents(): AuthUser[] {
+  return USERS.filter(u => u.role === 'student').map(({ password, ...u }) => ({ ...u }))
 }
