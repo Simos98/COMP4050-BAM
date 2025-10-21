@@ -1,11 +1,12 @@
 import { useEffect, useState } from 'react'
-import { Card, Table, Button, Modal, Form, Input, message } from 'antd'
+import { Card, Table, Button, Modal, Form, Input, message, Popconfirm, Space } from 'antd'
 import type { ColumnsType } from 'antd/es/table'
-import { listDevices, createDevice, type Device } from '../services/devices'
+import { listDevices, createDevice, deleteDevice, type Device } from '../services/devices'
 import { useAuth } from '../context/AuthContext'
 
 export default function Devices() {
   const { user } = useAuth()
+  const isAdmin = user?.role === 'admin'
   const [data, setData] = useState<Device[]>([])
   const [loading, setLoading] = useState(false)
   const [open, setOpen] = useState(false)
@@ -28,26 +29,59 @@ export default function Devices() {
   const onCreate = async () => {
     try {
       const values = await form.validateFields()
-      await createDevice({ deviceId: values.deviceId.trim(), lab: values.lab.trim() })
+      await createDevice({
+        deviceId: values.deviceId.trim(),
+        lab: values.lab.trim(),
+        ip: values.ip ? String(values.ip).trim() : undefined,
+        port: values.port ? Number(values.port) : undefined,
+      })
       message.success('Device added')
       form.resetFields()
       setOpen(false)
       load()
     } catch (err: any) {
-      message.error(err?.message || 'Failed to add device')
+      if (err?.status === 403) message.error('Forbidden: admin only')
+      else message.error(err?.message || 'Failed to add device')
+    }
+  }
+
+  const handleDelete = async (id: string) => {
+    try {
+      await deleteDevice(id)
+      message.success('Device removed')
+      load()
+    } catch (err: any) {
+      if (err?.status === 403) message.error('Forbidden: admin only')
+      else if (err?.status === 404) message.error('Device not found')
+      else message.error('Failed to delete device')
     }
   }
 
   const columns: ColumnsType<Device> = [
     { title: 'Device ID', dataIndex: 'deviceId', key: 'deviceId' },
     { title: 'Lab', dataIndex: 'lab', key: 'lab' },
+    { title: 'IP', dataIndex: 'ip', key: 'ip', render: (v) => v ?? '—' },
+    { title: 'Port', dataIndex: 'port', key: 'port', render: (v) => v ?? '—' },
+    {
+      title: 'Actions',
+      key: 'actions',
+      render: (_, record) => (
+        <Space>
+          {isAdmin ? (
+            <Popconfirm title="Delete device?" onConfirm={() => handleDelete(record.id)}>
+              <Button danger type="text">Delete</Button>
+            </Popconfirm>
+          ) : null}
+        </Space>
+      )
+    }
   ]
 
   return (
     <Card
       title="Devices"
       extra={
-        user?.role === 'admin' ? (
+        isAdmin ? (
           <Button type="primary" onClick={() => setOpen(true)}>
             Add Device
           </Button>
@@ -64,6 +98,20 @@ export default function Devices() {
 
           <Form.Item label="Lab" name="lab" rules={[{ required: true, message: 'Enter lab name or number' }]}>
             <Input placeholder="e.g. Lab 1" />
+          </Form.Item>
+
+          <Form.Item label="IP Address" name="ip" rules={[
+            { required: true, message: 'IP address is required' },
+            { pattern: /^(\d{1,3}\.){3}\d{1,3}$/, message: 'Enter valid IP' }
+          ]}>
+            <Input placeholder="e.g. 192.168.10.101" />
+          </Form.Item>
+
+          <Form.Item label="Port" name="port" rules={[
+            { required: true, message: 'Port is required' },
+            { pattern: /^\d+$/, message: 'Enter valid port' }
+          ]}>
+            <Input placeholder="e.g. 8000" />
           </Form.Item>
         </Form>
       </Modal>

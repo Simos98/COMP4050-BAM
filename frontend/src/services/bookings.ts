@@ -1,5 +1,6 @@
 import dayjs from 'dayjs'
 import { getUserFromToken } from './mockAuth'
+import { getDevice } from './devices'
 import type { Booking, BookingStatus } from '../types'
 
 const KEY = 'bookings_v1'
@@ -66,6 +67,9 @@ export async function getBooking(id: string): Promise<Booking> {
   if (user.role !== 'admin' && b.user !== user.email) {
     const e: any = new Error('Forbidden'); e.status = 403; throw e
   }
+
+  // optionally: ensure device still configured when returning booking for viewing
+  // (booking view components will also check device config before allowing camera preview)
   return b
 }
 
@@ -90,6 +94,15 @@ export async function createBooking(
   }
   if (dayjs(input.end).valueOf() <= dayjs(input.start).valueOf()) {
     const e: any = new Error('end must be after start'); e.status = 400; throw e
+  }
+
+  // ensure the device exists and has ip+port configured (required for camera usage)
+  const device = await getDevice(input.deviceId).catch(() => null)
+  if (!device) {
+    const e: any = new Error('Device not found'); e.status = 404; throw e
+  }
+  if (!device.ip || !device.port) {
+    const e: any = new Error('Device is not configured with IP and port'); e.status = 400; throw e
   }
 
   const all = readAll()
