@@ -5,7 +5,7 @@ import dayjs, { Dayjs } from 'dayjs'
 import type { Booking, BookingStatus } from '../types'
 import { listBookings, createBooking, updateBookingStatus, deleteBooking } from '../services/bookings'
 import { listDevices } from '../services/devices'
-import type { Device } from '../services/devices'
+import type { DeviceRecord } from '../services/devices'
 import { useAuth } from '../context/AuthContext'
 import { listStudents } from '../services/mockAuth'
 import type { AuthUser } from '../services/mockAuth'
@@ -21,12 +21,12 @@ const STATUS_COLORS: Record<BookingStatus, string> = {
 }
 
 export default function Bookings() {
-  const { user } = useAuth()
+  const { user, logout } = useAuth()
   const navigate = useNavigate()
   const isAdmin = user?.role === 'admin'
   const isTeacher = user?.role === 'teacher'
   const [data, setData] = useState<Booking[]>([])
-  const [devices, setDevices] = useState<Device[]>([])
+  const [devices, setDevices] = useState<DeviceRecord[]>([])
   const [students, setStudents] = useState<AuthUser[]>([])
   const [loading, setLoading] = useState(false)
   const [open, setOpen] = useState(false)
@@ -36,7 +36,9 @@ export default function Bookings() {
   const load = async () => {
     setLoading(true)
     try {
-      const [rows, devs, studs] = await Promise.all([listBookings(), listDevices(), listStudents()])
+      const [bookingsResp, devs, studs] = await Promise.all([listBookings(), listDevices(), listStudents()])
+      // listBookings() may return { items: Booking[], ... } or an array — normalize to Booking[]
+      const rows = Array.isArray(bookingsResp) ? bookingsResp : (bookingsResp.items ?? [])
       setData(rows)
       setDevices(devs)
       setStudents(studs)
@@ -53,8 +55,6 @@ export default function Bookings() {
     try {
       const values = await form.validateFields()
       const range: [Dayjs, Dayjs] = values.range
-
-      // normalize owner: values.user may be undefined; fall back to current user's email
       const rawOwner = values.user ?? user?.email
       const owner = typeof rawOwner === 'string' ? rawOwner.toLowerCase().trim() : String(rawOwner ?? user?.email ?? '').toLowerCase()
 
@@ -69,8 +69,8 @@ export default function Bookings() {
       form.resetFields()
       setOpen(false)
       load()
-    } catch (err:any) {
-      // booking service already throws status codes/messages
+    } catch (err: any) {
+      if (err?.status === 401) { await logout(); navigate('/login'); return }
       if (err?.status === 403) message.error('Forbidden: insufficient permissions')
       else if (err?.status === 404) message.error('Target user or device not found')
       else message.error(err?.message || 'Failed to create booking')
@@ -82,7 +82,8 @@ export default function Bookings() {
       await updateBookingStatus(id, status)
       message.success(`Marked as ${status}`)
       load()
-    } catch {
+    } catch (err: any) {
+      if (err?.status === 401) { await logout(); navigate('/login'); return }
       message.error('Failed to update status')
     }
   }
@@ -92,7 +93,8 @@ export default function Bookings() {
       await deleteBooking(id)
       message.success('Deleted')
       load()
-    } catch {
+    } catch (err: any) {
+      if (err?.status === 401) { await logout(); navigate('/login'); return }
       message.error('Failed to delete')
     }
   }

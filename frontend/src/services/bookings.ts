@@ -1,182 +1,57 @@
 import dayjs from 'dayjs'
-import { getUserFromToken, getUserByEmail } from './mockAuth'
 import { getDevice } from './devices'
 import type { Booking, BookingStatus } from '../types'
+import { apiGet, apiPost, apiPatch, apiDelete } from './api'
 
-const KEY = 'bookings_v1'
-
-// Seed demo data
-function seedIfEmpty() {
-  const raw = localStorage.getItem(KEY)
-  if (raw) return
-  const now = dayjs()
-  const demo: Booking[] = [
-    {
-      id: crypto.randomUUID(),
-      user: 'student01@school.edu',
-      deviceId: 'B-001',
-      start: now.add(1, 'hour').toISOString(),
-      end: now.add(2, 'hour').toISOString(),
-      status: 'pending',
-      notes: 'Biology class prep'
-    },
-    {
-      id: crypto.randomUUID(),
-      user: 'alice@school.edu',
-      deviceId: 'B-003',
-      start: now.add(1, 'day').hour(9).minute(0).second(0).toISOString(),
-      end: now.add(1, 'day').hour(10).minute(0).second(0).toISOString(),
-      status: 'approved',
-      notes: ''
-    },
-  ]
-  localStorage.setItem(KEY, JSON.stringify(demo))
-}
-seedIfEmpty()
-
-function readAll(): Booking[] {
-  const raw = localStorage.getItem(KEY)
-  return raw ? (JSON.parse(raw) as Booking[]) : []
-}
-function writeAll(list: Booking[]) {
-  localStorage.setItem(KEY, JSON.stringify(list))
-}
-function delay(ms = 200) { return new Promise(res => setTimeout(res, ms)) }
-
-export async function listBookings(): Promise<Booking[]> {
-  await delay()
-  const user = getUserFromToken()
-  const all = readAll().sort((a, b) => dayjs(a.start).valueOf() - dayjs(b.start).valueOf())
-  if (!user) return []
-  if (user.role === 'admin') return all
-  // non-admins only see their own bookings
-  return all.filter(b => b.user === user.email)
+export async function listBookings(params?: Record<string, any>): Promise<{ items: Booking[]; page?: number; page_size?: number; total?: number }> {
+  const body = await apiGet('/api/bookings', params)
+  return { items: body.items ?? body, page: body.page, page_size: body.page_size, total: body.total }
 }
 
 export async function getBooking(id: string): Promise<Booking> {
-  await delay()
-  const all = readAll()
-  const b = all.find(x => x.id === id)
-  if (!b) {
-    const e: any = new Error('Not found')
-    e.status = 404
-    throw e
-  }
-  const user = getUserFromToken()
-  if (!user) { const e: any = new Error('Unauthorized'); e.status = 401; throw e }
-  if (user.role !== 'admin' && b.user !== user.email) {
-    const e: any = new Error('Forbidden'); e.status = 403; throw e
-  }
-  return b
+  const body = await apiGet(`/api/bookings/${encodeURIComponent(id)}`)
+  return body.booking ?? body
 }
 
-export async function createBooking(
-  input: Omit<Booking, 'id' | 'status'> & { status?: BookingStatus }
-): Promise<Booking> {
-  await delay()
-  const user = getUserFromToken()
-  if (!user) { const e: any = new Error('Unauthorized'); e.status = 401; throw e }
-
-  // determine owner email (explicit or default to current user)
-  const ownerEmail = (input as any).user ? String((input as any).user).toLowerCase() : user.email.toLowerCase()
-
-  // RBAC:
-  // - admin: allowed for anyone
-  // - teacher: allowed for self OR for users that are students
-  // - student: allowed only for self
-  if (user.role === 'admin') {
-    // admin allowed for any ownerEmail
-  } else if (user.role === 'teacher') {
-    if (ownerEmail !== user.email.toLowerCase()) {
-      // must target an existing student
-      const target = getUserByEmail(ownerEmail)
-      if (!target) {
-        const e: any = new Error('Target user not found'); e.status = 404; throw e
-      }
-      if (target.role !== 'student') {
-        const e: any = new Error('Teachers may only create bookings for students'); e.status = 403; throw e
-      }
-    }
-  } else { // student
-    if (ownerEmail !== user.email.toLowerCase()) {
-      const e: any = new Error('Students can only create bookings for themselves'); e.status = 403; throw e
-    }
-  }
-
-  // basic validation
-  if (!input.deviceId || !input.start || !input.end) {
-    const e: any = new Error('Invalid payload'); e.status = 400; throw e
-  }
-  if (dayjs(input.end).valueOf() <= dayjs(input.start).valueOf()) {
-    const e: any = new Error('end must be after start'); e.status = 400; throw e
-  }
-
-  // ensure the device exists and has ip+port configured (required for camera usage)
-  const device = await getDevice(input.deviceId).catch(() => null)
-  if (!device) {
-    const e: any = new Error('Device not found'); e.status = 404; throw e
-  }
-  if (!device.ip || !device.port) {
-    const e: any = new Error('Device is not configured with IP and port'); e.status = 400; throw e
-  }
-
-  const all = readAll()
-  const booking: Booking = {
-    id: crypto.randomUUID(),
-    user: ownerEmail,
-    deviceId: input.deviceId,
+export async function createBooking(input: { user?: string; deviceId: string; start: string; end: string; notes?: string }) {
+  // backend will enforce RBAC
+  const body = await apiPost('/api/bookings', {
+    user: input.user,
+    device_id: input.deviceId,
     start: input.start,
     end: input.end,
-    status: input.status ?? 'pending',
-    notes: input.notes ?? ''
-  }
-  all.push(booking)
-  writeAll(all)
-  return booking
+    notes: input.notes
+  })
+  return body.booking ?? body
 }
 
-export async function updateBookingStatus(id: string, status: BookingStatus): Promise<Booking> {
-  await delay()
-  const user = getUserFromToken()
-  if (!user) { const e: any = new Error('Unauthorized'); e.status = 401; throw e }
-  const all = readAll()
-  const idx = all.findIndex(b => b.id === id)
-  if (idx === -1) { const e: any = new Error('Not found'); e.status = 404; throw e }
-  const booking = all[idx]
-
-  // Admins can set any status. Non-admins can only cancel their own booking.
-  if (user.role !== 'admin') {
-    if (status !== 'cancelled') {
-      const e: any = new Error('Forbidden'); e.status = 403; throw e
-    }
-    if (booking.user !== user.email) {
-      const e: any = new Error('Forbidden'); e.status = 403; throw e
-    }
-  }
-
-  booking.status = status
-  all[idx] = booking
-  writeAll(all)
-  return booking
+export async function updateBookingStatus(id: string, status: BookingStatus) {
+  // use PATCH /api/bookings/:id with { status }
+  const body = await apiPatch(`/api/bookings/${encodeURIComponent(id)}`, { status })
+  return body.booking ?? body
 }
 
-export async function deleteBooking(id: string): Promise<void> {
-  await delay()
-  const user = getUserFromToken()
-  if (!user) { const e: any = new Error('Unauthorized'); e.status = 401; throw e }
-  const all = readAll()
-  const idx = all.findIndex(b => b.id === id)
-  if (idx === -1) { const e: any = new Error('Not found'); e.status = 404; throw e }
-  const booking = all[idx]
-  // allow admin only (or owner only while pending — choose your policy)
-  if (user.role !== 'admin') {
-    const e: any = new Error('Forbidden'); e.status = 403; throw e
-  }
-  all.splice(idx, 1)
-  writeAll(all)
+export async function deleteBooking(id: string) {
+  return apiDelete(`/api/bookings/${encodeURIComponent(id)}`)
 }
 
-export async function listBookingImages(_bookingId: string) {
-  await delay(120)
-  return []
+export async function listBookingImages(bookingId: string) {
+  const body = await apiGet(`/api/bookings/${encodeURIComponent(bookingId)}/images`)
+  return body.items ?? body
 }
+
+// const KEY = 'bookings_v1'
+
+// // Seed demo data
+// function seedIfEmpty() {
+//   const raw = localStorage.getItem(KEY)
+//   if (raw) return
+//   const now = dayjs()
+//   const demo: Booking[] = [
+//     {
+//       id: crypto.randomUUID(),
+//       user: 'student01@school.edu',
+//       deviceId: 'B-001',
+//       start: now.add(1, 'hour').toISOString(),
+//       end: now.add(2, 'hour').toISOString(),
+//       status: 'pending',

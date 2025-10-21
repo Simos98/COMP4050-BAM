@@ -1,13 +1,15 @@
 import { useEffect, useState } from 'react'
 import { Card, Table, Button, Modal, Form, Input, message, Popconfirm, Space } from 'antd'
 import type { ColumnsType } from 'antd/es/table'
-import { listDevices, createDevice, deleteDevice, type Device } from '../services/devices'
+import { listDevices, createDevice, deleteDevice, type DeviceRecord } from '../services/devices'
 import { useAuth } from '../context/AuthContext'
+import { useNavigate } from 'react-router-dom'
 
 export default function Devices() {
-  const { user } = useAuth()
+  const { user, logout } = useAuth()
+  const navigate = useNavigate()
   const isAdmin = user?.role === 'admin'
-  const [data, setData] = useState<Device[]>([])
+  const [data, setData] = useState<DeviceRecord[]>([])
   const [loading, setLoading] = useState(false)
   const [open, setOpen] = useState(false)
   const [form] = Form.useForm()
@@ -17,7 +19,8 @@ export default function Devices() {
     try {
       const rows = await listDevices()
       setData(rows)
-    } catch (e) {
+    } catch (e: any) {
+      if (e?.status === 401) { await logout(); navigate('/login'); return }
       message.error('Failed to load devices')
     } finally {
       setLoading(false)
@@ -32,14 +35,15 @@ export default function Devices() {
       await createDevice({
         deviceId: values.deviceId.trim(),
         lab: values.lab.trim(),
-        ip: values.ip ? String(values.ip).trim() : undefined,
-        port: values.port ? Number(values.port) : undefined,
+        ip: values.ip.trim(),
+        port: Number(values.port),
       })
       message.success('Device added')
       form.resetFields()
       setOpen(false)
       load()
     } catch (err: any) {
+      if (err?.status === 401) { await logout(); navigate('/login'); return }
       if (err?.status === 403) message.error('Forbidden: admin only')
       else message.error(err?.message || 'Failed to add device')
     }
@@ -51,13 +55,14 @@ export default function Devices() {
       message.success('Device removed')
       load()
     } catch (err: any) {
+      if (err?.status === 401) { await logout(); navigate('/login'); return }
       if (err?.status === 403) message.error('Forbidden: admin only')
       else if (err?.status === 404) message.error('Device not found')
       else message.error('Failed to delete device')
     }
   }
 
-  const columns: ColumnsType<Device> = [
+  const columns: ColumnsType<DeviceRecord> = [
     { title: 'Device ID', dataIndex: 'deviceId', key: 'deviceId' },
     { title: 'Lab', dataIndex: 'lab', key: 'lab' },
     { title: 'IP', dataIndex: 'ip', key: 'ip', render: (v) => v ?? '—' },

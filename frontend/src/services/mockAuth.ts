@@ -1,84 +1,60 @@
+// NOTE: this file previously contained mock auth; it's now the auth client that uses session cookies.
+// Keep filename for imports in other parts of app.
+import { apiGet, apiPost } from './api'
+
 export type AuthUser = {
   id: string
-  name: string
+  name?: string
   email: string
   role: 'admin' | 'teacher' | 'student'
 }
 
-const USERS: Array<AuthUser & { password: string }> = [
-  { id: 'u-admin', name: 'Admin User', email: 'admin@school.edu', role: 'admin', password: 'adminpass' },
-  { id: 'u-student1', name: 'Student One', email: 'student01@school.edu', role: 'student', password: 'studentpass' },
-  { id: 'u-teacher', name: 'Alice Teacher', email: 'alice@school.edu', role: 'teacher', password: 'teacherpass' },
-]
-
-const TOKEN_KEY = 'bioscope:auth_token'
-
-// Simple token encoding (NOT secure — mock only)
-function encodeToken(payload: object) {
-  return btoa(JSON.stringify(payload))
+// POST /auth/login
+export async function login(email: string, password: string): Promise<AuthUser> {
+  const body = await apiPost('/auth/login', { email, password })
+  // backend may return { user } or { user, token } — we expect user object; session cookie set by server
+  const user: AuthUser = body.user ?? body
+  return user
 }
-function decodeToken(token: string | null) {
-  if (!token) return null
+
+// POST /auth/logout
+export async function logout() {
+  // server should clear session cookie
+  await apiPost('/auth/logout')
+}
+
+// GET /auth/me
+export async function me(): Promise<AuthUser | null> {
   try {
-    return JSON.parse(atob(token))
+    const body = await apiGet('/auth/me')
+    return body.user ?? body
+  } catch (err: any) {
+    if (err?.status === 401) return null
+    throw err
+  }
+}
+
+// Helpers to query users (admin endpoints)
+export async function listUsers(): Promise<AuthUser[]> {
+  const body = await apiGet('/api/users')
+  return body.items ?? body
+}
+
+export async function getUserByEmail(email: string): Promise<AuthUser | null> {
+  if (!email) return null
+  try {
+    const body = await apiGet(`/api/users`, { q: email })
+    // backend should support search; fallback to scanning items
+    const items = body.items ?? body
+    const found = Array.isArray(items) ? items.find((u: any) => u.email.toLowerCase() === email.toLowerCase()) : null
+    return found ?? null
   } catch {
     return null
   }
 }
 
-export async function login(email: string, password: string) {
-  await new Promise((r) => setTimeout(r, 250))
-  const found = USERS.find(u => u.email.toLowerCase() === String(email).toLowerCase())
-  if (!found || found.password !== password) {
-    const e: any = new Error('Invalid credentials')
-    e.status = 401
-    throw e
-  }
-  const tokenPayload = { id: found.id, email: found.email, role: found.role, exp: Date.now() + (1000 * 60 * 60) }
-  const token = encodeToken(tokenPayload)
-  localStorage.setItem(TOKEN_KEY, token)
-  // return user info (without password) and token
-  const { password: _, ...user } = found
-  return { user, token }
-}
-
-export function logout() { localStorage.removeItem(TOKEN_KEY) }
-
-export function me() {
-  const token = localStorage.getItem(TOKEN_KEY)
-  const payload = decodeToken(token)
-  if (!payload) return null
-  if (payload.exp && Date.now() > payload.exp) {
-    localStorage.removeItem(TOKEN_KEY)
-    return null
-  }
-  return { id: payload.id, email: payload.email, role: payload.role }
-}
-
-export function getUserFromToken(): AuthUser | null {
-  const payload = me()
-  if (!payload) return null
-  const found = USERS.find(u => u.email === payload.email)
-  if (!found) return null
-  const { password: _, ...user } = found
-  return user
-}
-
-// New helper: lookup user by email (returns null if unknown)
-export function getUserByEmail(email: string): AuthUser | null {
-  if (!email) return null
-  const found = USERS.find(u => u.email.toLowerCase() === String(email).toLowerCase())
-  if (!found) return null
-  const { password: _, ...user } = found
-  return user
-}
-
-// New helper: list all users (without passwords)
-export function listUsers(): AuthUser[] {
-  return USERS.map(({ password, ...u }) => ({ ...u }))
-}
-
-// New helper: list only students
-export function listStudents(): AuthUser[] {
-  return USERS.filter(u => u.role === 'student').map(({ password, ...u }) => ({ ...u }))
+export async function listStudents(): Promise<AuthUser[]> {
+  // admin-only endpoint; backend may expose /api/users?role=student
+  const body = await apiGet('/api/users', { role: 'student' })
+  return body.items ?? body
 }

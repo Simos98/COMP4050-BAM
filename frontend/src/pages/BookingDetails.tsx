@@ -5,16 +5,16 @@ import { Card, Row, Col, Button, Space, Spin, message, Typography, Alert } from 
 import { ArrowUpOutlined, ArrowDownOutlined, ArrowLeftOutlined, ArrowRightOutlined, ReloadOutlined, ZoomInOutlined, ZoomOutOutlined } from '@ant-design/icons'
 import { getBooking } from '../services/bookings'
 import { getPreview, move, type Direction, type CameraState } from '../services/camera'
-import { getDevice } from '../services/devices'
 import type { Booking } from '../types'
 import { useAuth } from '../context/AuthContext'
+import { getDevice } from '../services/devices'
 
 const { Title, Text } = Typography
 
 export default function BookingDetails() {
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
-  const { user } = useAuth()
+  const { user, logout } = useAuth()
   const [booking, setBooking] = useState<Booking | null>(null)
   const [loading, setLoading] = useState(true)
   const [imgUrl, setImgUrl] = useState<string | null>(null)
@@ -49,6 +49,11 @@ export default function BookingDetails() {
           setCamState(null)
         }
       } catch (err: any) {
+        if (err?.status === 401) {
+          await logout()
+          navigate('/login')
+          return
+        }
         console.error(err)
         if (err?.status === 403 || err?.status === 401) {
           setErrorMessage('Not authorized to view this booking.')
@@ -63,13 +68,12 @@ export default function BookingDetails() {
     }
     load()
     return () => { mounted = false }
-  }, [id, navigate, user])
+  }, [id, navigate, user, logout])
 
   const doMove = async (dir: Direction) => {
     if (!booking) return
-    // enforce same rule on actions: only admins or approved bookings can move
     if (!allowedToView) {
-      message.warning('Camera unavailable until booking is approved')
+      message.warning('Camera unavailable until booking is approved and device configured')
       return
     }
     setBusy(true)
@@ -77,7 +81,8 @@ export default function BookingDetails() {
       const res = await move(booking.deviceId, dir)
       setImgUrl(res.url)
       setCamState(res.state)
-    } catch (e) {
+    } catch (err: any) {
+      if (err?.status === 401) { await logout(); navigate('/login'); return }
       message.error('Failed to move camera')
     } finally {
       setBusy(false)

@@ -1,9 +1,9 @@
 import { Card, Col, Row, Statistic, Table, Tag } from 'antd'
 import { useEffect, useMemo, useState } from 'react'
-import dayjs from 'dayjs'
 import { listBookings } from '../services/bookings'
 import type { Booking } from '../types'
 import { useAuth } from '../context/AuthContext'
+import dayjs from 'dayjs'
 
 const STATUS_COLORS: Record<string, string> = {
   pending: 'gold',
@@ -21,10 +21,11 @@ export default function Home() {
     const load = async () => {
       setLoading(true)
       try {
-        const rows = await listBookings()
+        const bookingsResp = await listBookings()
+        const rows = Array.isArray(bookingsResp) ? bookingsResp : (bookingsResp.items ?? [])
         setBookings(rows)
-      } catch {
-        // swallow — pages that call Home should handle messaging elsewhere
+      } catch (e) {
+        // swallow – pages that call Home should handle messaging elsewhere
       } finally {
         setLoading(false)
       }

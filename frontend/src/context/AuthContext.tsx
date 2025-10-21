@@ -1,41 +1,57 @@
 import React, { createContext, useContext, useEffect, useState } from 'react'
-import { login as mockLogin, logout as mockLogout, me as mockMe } from '../services/mockAuth'
+import { login as apiLogin, logout as apiLogout, me as apiMe } from '../services/mockAuth'
+import type { AuthUser } from '../services/mockAuth'
 
-type User = { id: string; name?: string; email: string; role: string } | null
+type User = AuthUser | null
 
 type AuthContextValue = {
   user: User
+  loading: boolean
   login: (email: string, password: string) => Promise<void>
-  logout: () => void
+  logout: () => Promise<void>
+  refresh: () => Promise<void>
 }
 
 const AuthContext = createContext<AuthContextValue | undefined>(undefined)
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User>(null)
+  const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    // restore from token (mock)
-    const payload = mockMe()
-    if (payload) {
-      // mockMe returns minimal info (id,email,role)
-      setUser({ id: payload.id, email: payload.email, role: payload.role })
-    } else {
-      setUser(null)
-    }
+    // restore session by calling /auth/me
+    ;(async () => {
+      setLoading(true)
+      try {
+        const u = await apiMe()
+        setUser(u)
+      } catch {
+        setUser(null)
+      } finally {
+        setLoading(false)
+      }
+    })()
   }, [])
 
   async function login(email: string, password: string) {
-    const res = await mockLogin(email, password)
-    setUser({ id: res.user.id, name: res.user.name, email: res.user.email, role: res.user.role })
+    const u = await apiLogin(email, password)
+    setUser(u)
   }
 
-  function logout() {
-    mockLogout()
-    setUser(null)
+  async function logout() {
+    try {
+      await apiLogout()
+    } finally {
+      setUser(null)
+    }
   }
 
-  return <AuthContext.Provider value={{ user, login, logout }}>{children}</AuthContext.Provider>
+  async function refresh() {
+    const u = await apiMe()
+    setUser(u)
+  }
+
+  return <AuthContext.Provider value={{ user, loading, login, logout, refresh }}>{children}</AuthContext.Provider>
 }
 
 export function useAuth() {
