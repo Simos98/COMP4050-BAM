@@ -1,5 +1,7 @@
 import { Router } from 'express';
 import healthRoutes from './healthRoutes';
+import userRoutes from './userRoutes';
+import authRoutes from './authRoutes'; 
 
 const router = Router();
 
@@ -9,5 +11,9 @@ router.use('/', healthRoutes);
 // Future routes will go here:
 // router.use('/api/users', userRoutes);
 // router.use('/api/auth', authRoutes);
+
+router.use('/', healthRoutes);
+router.use('/api/users', userRoutes);
+router.use('/api/auth', authRoutes);
 
 export default router;

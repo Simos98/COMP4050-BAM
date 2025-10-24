@@ -1,8 +1,8 @@
 // This is your Prisma schema file,
 // learn more about it in the docs: https://pris.ly/d/prisma-schema
 
-// Push to database with: npx prismaa db push
-// Generate Prisma client with: npx prisma generate
+// Push to database with: npx prismaa db push - DONT USE UNLESS YOU KNOW WHAT YOU ARE DOING
+// Generate Prisma client with: npx prisma generate - DONT USE UNLESS YOU KNOW WHAT YOU ARE DOING
 // View through web interface with: npx prisma studio
 // Web Based PostgreSQL Manager: docker-compose up -d pgadmin
     // Access: http://localhost:5050
@@ -33,6 +33,29 @@ model User {
   updatedAt DateTime @updatedAt @map("updated_at")
 
   @@map("users") // Table name in database will be "users"
+}
+
+model Device {
+  id        String   @id @default(cuid())        // Primary key (auto-generated)
+  deviceId String   @unique @map("device_id")    // Device ID (must be unique)
+  lab      String   @map("lab")                  // Lab name
+  ipAddress String   @map("ip_address")          // IP address
+  port      Int      @map("port")                  // Port
+  
+  // Automatic timestamps
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+}
+
+model Booking {
+  id        String   @id @default(cuid())        // Primary key (auto-generated)
+  userId    String   @map("user_id")              // User ID
+  deviceId  String   @map("device_id")            // Device ID
+  start     DateTime @map("start")                // Start time
+  end       DateTime @map("end")                  // End time
+  notes     String?  @map("notes")                // Notes
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
 }
 
 enum UserRole {
