@@ -1,72 +1,173 @@
+// src/pages/Devices.tsx
 import { useEffect, useState } from 'react'
-import { Card, Table, Button, Modal, Form, Input, message } from 'antd'
-import type { ColumnsType } from 'antd/es/table'
-import { listDevices, createDevice, type Device } from '../services/devices'
-import { useAuth } from '../context/AuthContext'
+import { Table, Button, Modal, Form, Input, Select, message, Tag, Space } from 'antd'
+import { PlusOutlined } from '@ant-design/icons'
+import { listDevices, createDevice, deleteDevice, updateDevice } from '../services/devices'
+import type { Device } from '../services/devices'
 
 export default function Devices() {
-  const { user } = useAuth()
-  const [data, setData] = useState<Device[]>([])
+  const [devices, setDevices] = useState<Device[]>([])
   const [loading, setLoading] = useState(false)
-  const [open, setOpen] = useState(false)
+  const [isModalOpen, setIsModalOpen] = useState(false)
   const [form] = Form.useForm()
 
-  const load = async () => {
+  // Load devices on mount
+  const loadDevices = async () => {
     setLoading(true)
     try {
-      const rows = await listDevices()
-      setData(rows)
-    } catch (e) {
+      const data = await listDevices()
+      setDevices(data)
+    } catch (err) {
+      console.error(err)
       message.error('Failed to load devices')
     } finally {
       setLoading(false)
     }
   }
 
-  useEffect(() => { load() }, [])
+  useEffect(() => {
+    loadDevices()
+  }, [])
 
-  const onCreate = async () => {
+  // Handle new device creation
+  const handleCreate = async () => {
     try {
       const values = await form.validateFields()
-      await createDevice({ deviceId: values.deviceId.trim(), lab: values.lab.trim() })
-      message.success('Device added')
+      await createDevice({
+        model: values.model,
+        location: values.location,
+        status: values.status,
+      })
+      message.success('Device created successfully!')
       form.resetFields()
-      setOpen(false)
-      load()
-    } catch (err: any) {
-      message.error(err?.message || 'Failed to add device')
+      setIsModalOpen(false)
+      loadDevices()
+    } catch (err) {
+      console.error(err)
+      message.error('Failed to create device')
     }
   }
 
-  const columns: ColumnsType<Device> = [
-    { title: 'Device ID', dataIndex: 'deviceId', key: 'deviceId' },
-    { title: 'Lab', dataIndex: 'lab', key: 'lab' },
+  // Optional actions (update / delete)
+  const handleUpdateStatus = async (id: string, status: Device['status']) => {
+    try {
+      await updateDevice(id, { status })
+      message.success(`Device marked as ${status}`)
+      loadDevices()
+    } catch (err) {
+      console.error(err)
+      message.error('Failed to update device status')
+    }
+  }
+
+  const handleDelete = async (id: string) => {
+    try {
+      await deleteDevice(id)
+      message.success('Device deleted successfully')
+      loadDevices()
+    } catch (err) {
+      console.error(err)
+      message.error('Failed to delete device')
+    }
+  }
+
+  // Table columns
+  const columns = [
+    { title: 'ID', dataIndex: 'id', key: 'id' },
+    { title: 'Model', dataIndex: 'model', key: 'model' },
+    { title: 'Location', dataIndex: 'location', key: 'location' },
+    {
+      title: 'Status',
+      dataIndex: 'status',
+      key: 'status',
+      render: (status: Device['status']) => {
+        const colors: Record<Device['status'], string> = {
+          online: 'green',
+          offline: 'volcano',
+          busy: 'gold',
+          maintenance: 'blue',
+        }
+        return <Tag color={colors[status]}>{status.toUpperCase()}</Tag>
+      },
+    },
+    {
+      title: 'Actions',
+      key: 'actions',
+      render: (_: any, record: Device) => (
+        <Space>
+          <Button size="small" onClick={() => handleUpdateStatus(record.id, 'maintenance')}>
+            Maintenance
+          </Button>
+          <Button size="small" danger onClick={() => handleDelete(record.id)}>
+            Delete
+          </Button>
+        </Space>
+      ),
+    },
   ]
 
   return (
-    <Card
-      title="Devices"
-      extra={
-        user?.role === 'admin' ? (
-          <Button type="primary" onClick={() => setOpen(true)}>
-            Add Device
-          </Button>
-        ) : null
-      }
-    >
-      <Table rowKey="id" columns={columns} dataSource={data} loading={loading} pagination={{ pageSize: 8 }} />
+    <div style={{ margin: 24 }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 16 }}>
+        <h2>Devices</h2>
+        <Button
+          type="primary"
+          icon={<PlusOutlined />}
+          onClick={() => setIsModalOpen(true)}
+        >
+          Add Device
+        </Button>
+      </div>
 
-      <Modal title="Add Device" open={open} onOk={onCreate} onCancel={() => { setOpen(false); form.resetFields() }} okText="Add">
+      <Table
+        rowKey="id"
+        dataSource={devices}
+        columns={columns}
+        loading={loading}
+        pagination={false}
+      />
+
+      <Modal
+        title="Add Device"
+        open={isModalOpen}
+        onCancel={() => setIsModalOpen(false)}
+        onOk={handleCreate}
+        okText="Create"
+      >
         <Form layout="vertical" form={form}>
-          <Form.Item label="Device ID" name="deviceId" rules={[{ required: true, message: 'Enter device id' }]}>
-            <Input placeholder="e.g. B-001" />
+          <Form.Item
+            label="Model"
+            name="model"
+            rules={[{ required: true, message: 'Please enter the device model' }]}
+          >
+            <Input placeholder="Bioscope Mk4" />
           </Form.Item>
 
-          <Form.Item label="Lab" name="lab" rules={[{ required: true, message: 'Enter lab name or number' }]}>
-            <Input placeholder="e.g. Lab 1" />
+          <Form.Item
+            label="Location"
+            name="location"
+            rules={[{ required: true, message: 'Please enter the device location' }]}
+          >
+            <Input placeholder="Lab 4" />
+          </Form.Item>
+
+          <Form.Item
+            label="Status"
+            name="status"
+            initialValue="online"
+            rules={[{ required: true }]}
+          >
+            <Select
+              options={[
+                { value: 'online', label: 'Online' },
+                { value: 'offline', label: 'Offline' },
+                { value: 'busy', label: 'Busy' },
+                { value: 'maintenance', label: 'Maintenance' },
+              ]}
+            />
           </Form.Item>
         </Form>
       </Modal>
-    </Card>
+    </div>
   )
 }

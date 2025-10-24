@@ -1,110 +1,145 @@
-import dayjs from 'dayjs'
-import type { Booking, BookingStatus } from '../types'
+// src/services/bookings.ts
+import { api } from './api'
+import type { Booking } from '../types'
+import { useMocks } from './useMocks'
 
-const KEY = 'bookings_v1'
+// ------------------
+// Mock implementations
+// ------------------
 
-// Seed local demo data if none exists
-function seedIfEmpty() {
-  const raw = localStorage.getItem(KEY)
-  if (raw) return
-  const now = dayjs()
-  const demo: Booking[] = [
-    {
-      id: crypto.randomUUID(),
-      user: 'student01@school.edu',
-      deviceId: 'B-001',
-      start: now.add(1, 'hour').toISOString(),
-      end: now.add(2, 'hour').toISOString(),
-      status: 'pending',
-      notes: 'Biology class prep'
-    },
-    {
-      id: crypto.randomUUID(),
-      user: 'teacher.alice@school.edu',
-      deviceId: 'B-003',
-      start: now.add(1, 'day').hour(9).minute(0).second(0).toISOString(),
-      end: now.add(1, 'day').hour(10).minute(0).second(0).toISOString(),
-      status: 'approved'
-    },
-  ]
-  localStorage.setItem(KEY, JSON.stringify(demo))
-}
-seedIfEmpty()
-
-// Helpers for storage access
-function readAll(): Booking[] {
-  const raw = localStorage.getItem(KEY)
-  return raw ? (JSON.parse(raw) as Booking[]) : []
+function mockListBookings(): Booking[] {
+  const raw = localStorage.getItem('bookings_v1')
+  if (!raw) return []
+  return JSON.parse(raw)
 }
 
-function writeAll(list: Booking[]) {
-  localStorage.setItem(KEY, JSON.stringify(list))
+function mockCreateBooking(payload: {
+  user: string
+  deviceId: string
+  start: string
+  end: string
+  notes?: string
+}): Booking {
+  const all = mockListBookings()
+  const newBooking: Booking = {
+    id: crypto.randomUUID(),
+    user: payload.user,
+    deviceId: payload.deviceId,
+    start: payload.start,
+    end: payload.end,
+    status: 'pending',
+    notes: payload.notes,
+  }
+  all.push(newBooking)
+  localStorage.setItem('bookings_v1', JSON.stringify(all))
+  return newBooking
 }
 
-// Artificial delay for realism
-function delay(ms: number) {
-  return new Promise(res => setTimeout(res, ms))
+function mockUpdateBookingStatus(id: string, status: string): Booking | undefined {
+  const all = mockListBookings()
+  const idx = all.findIndex((b) => b.id === id)
+  if (idx >= 0) {
+    all[idx].status = status as any
+    localStorage.setItem('bookings_v1', JSON.stringify(all))
+    return all[idx]
+  }
+  return undefined
 }
 
-
-export async function listBookings(): Promise<Booking[]> {
-  await delay(200)
-  return readAll().sort((a, b) => dayjs(a.start).valueOf() - dayjs(b.start).valueOf())
+function mockDeleteBooking(id: string) {
+  const all = mockListBookings().filter((b) => b.id !== id)
+  localStorage.setItem('bookings_v1', JSON.stringify(all))
 }
 
-// Create a new booking
-export async function createBooking(
-  input: Omit<Booking, 'id' | 'status'> & { status?: BookingStatus }
-): Promise<Booking> {
-  await delay(250)
-  const b: Booking = { id: crypto.randomUUID(), status: input.status ?? 'pending', ...input }
-  const all = readAll()
-  all.push(b)
-  writeAll(all)
-  return b
+// ------------------
+// Live API implementations
+// ------------------
+
+async function apiListBookings(): Promise<Booking[]> {
+  const res = await api.get('/bookings')
+  // Backend should return { data: [...] }
+  return res.data.data ?? res.data
 }
 
-// Update booking status
-export async function updateBookingStatus(id: string, status: BookingStatus): Promise<Booking> {
-  await delay(200)
-  const all = readAll()
-  const idx = all.findIndex(b => b.id === id)
-  if (idx === -1) throw new Error('Booking not found')
-  all[idx] = { ...all[idx], status }
-  writeAll(all)
-  return all[idx]
+async function apiCreateBooking(payload: {
+  user: string
+  deviceId: string
+  start: string
+  end: string
+  notes?: string
+}): Promise<Booking> {
+  const res = await api.post('/bookings', payload)
+  return res.data.data ?? res.data
 }
 
-// Delete a booking
-export async function deleteBooking(id: string): Promise<void> {
-  await delay(200)
-  writeAll(readAll().filter(b => b.id !== id))
+async function apiUpdateBookingStatus(id: string, status: string): Promise<Booking> {
+  const res = await api.patch(`/bookings/${id}`, { status })
+  return res.data.data ?? res.data
 }
 
-export async function getBooking(id: string): Promise<Booking> {
-  await delay(150)
-  const all = readAll()
-  const found = all.find(b => b.id === id)
-  if (!found) throw new Error('Booking not found')
-  return found
+async function apiDeleteBooking(id: string) {
+  await api.delete(`/bookings/${id}`)
 }
 
-// Get microscope images for a booking (placeholder data)
-export async function listBookingImages(
+// ------------------
+// Toggle export based on mock mode
+// ------------------
+
+export const listBookings = useMocks ? mockListBookings : apiListBookings
+export const createBooking = useMocks ? mockCreateBooking : apiCreateBooking
+export const updateBookingStatus = useMocks ? mockUpdateBookingStatus : apiUpdateBookingStatus
+export const deleteBooking = useMocks ? mockDeleteBooking : apiDeleteBooking
+
+// ------------------
+// Get single booking by ID (mock + API support)
+// ------------------
+
+async function apiGetBooking(id: string): Promise<Booking> {
+  const res = await api.get(`/bookings/${id}`)
+  return res.data.data ?? res.data
+}
+
+function mockGetBooking(id: string): Booking | undefined {
+  const all = mockListBookings()
+  return all.find((b) => b.id === id)
+}
+
+// Toggle export
+export const getBooking = useMocks ? mockGetBooking : apiGetBooking
+
+// For now, mock data structure for images
+type BookingImage = {
+  id: string
   bookingId: string
-): Promise<Array<{ id: string; url?: string; createdAt?: string }>> {
-  await delay(150)
-  // Placeholder demo images (backend will replace with real data later)
-  return [
-    {
-      id: `${bookingId}-img-1`,
-      url: undefined, // URL will come from backend later
-      createdAt: dayjs().subtract(5, 'minutes').toISOString()
-    },
-    {
-      id: `${bookingId}-img-2`,
-      url: undefined,
-      createdAt: dayjs().subtract(2, 'minutes').toISOString()
-    }
-  ]
+  url: string
+  createdAt: string
 }
+
+const mockBookingImages: BookingImage[] = [
+  {
+    id: 'img-001',
+    bookingId: 'b001',
+    url: 'https://via.placeholder.com/300x200?text=Microscope+Image+1',
+    createdAt: new Date().toISOString(),
+  },
+  {
+    id: 'img-002',
+    bookingId: 'b001',
+    url: 'https://via.placeholder.com/300x200?text=Microscope+Image+2',
+    createdAt: new Date().toISOString(),
+  },
+]
+
+// Mock + API versions
+async function apiListBookingImages(bookingId: string): Promise<BookingImage[]> {
+  const res = await api.get(`/bookings/${bookingId}/images`)
+  return res.data.data ?? res.data
+}
+
+async function mockListBookingImages(bookingId: string): Promise<BookingImage[]> {
+  return mockBookingImages.filter((img) => img.bookingId === bookingId)
+}
+
+// Export toggle
+export const listBookingImages = useMocks ? mockListBookingImages : apiListBookingImages
+
