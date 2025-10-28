@@ -12,6 +12,7 @@ import Bookings from './pages/Bookings'
 import Admin from './pages/Admin'
 import BookingDetails from './pages/BookingDetails'
 import Login from './pages/Login'
+import Signup from './pages/Signup'
 import Devices from './pages/Devices'
 import Unauthorized from './pages/Unauthorized'
 import { useAuth } from './context/AuthContext'
@@ -76,6 +77,7 @@ export default function App() {
             <Route path="/" element={<Navigate to={user ? "/home" : "/login"} replace />} />
 
             <Route path="/login" element={<Login />} />
+            <Route path="/signup" element={<Signup />} />
             <Route path="/unauthorized" element={<Unauthorized />} />
 
             {/* Protected pages */}

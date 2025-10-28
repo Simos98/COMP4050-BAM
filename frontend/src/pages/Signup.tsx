@@ -1,46 +1,54 @@
 import React, { useState } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { useNavigate } from 'react-router-dom';
+import { signup } from '../services/auth';
 
-export default function Login() {
-  const { login, loading: authLoading } = useAuth();
+export default function Signup() {
+  const { login } = useAuth();
   const navigate = useNavigate();
-  const [username, setUsername] = useState('');
+  const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
   const [err, setErr] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
   const onSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setErr(null);
+
+    if (password !== confirmPassword) {
+      setErr('Passwords do not match');
+      return;
+    }
+
     setLoading(true);
     try {
-      const ok = await login(username, password);
+      // First register the user
+      await signup(email, password);
+      // Then log them in automatically
+      const ok = await login(email, password);
       if (ok) {
         navigate('/bookings');
       } else {
-        setErr('Invalid email/password or session not established');
+        setErr('Registration successful but login failed');
       }
     } catch (e: any) {
-      setErr(e?.body?.message ?? e?.message ?? 'Login failed');
+      setErr(e?.body?.message ?? e?.message ?? 'Registration failed');
     } finally {
       setLoading(false);
     }
   };
 
-  if (authLoading) {
-    return <div className="card" style={{ maxWidth: 420, margin: '24px auto' }}>Checking session…</div>;
-  }
-
   return (
     <div className="card" style={{ maxWidth: 420, margin: '24px auto' }}>
-      <h3>Login</h3>
+      <h3>Sign Up</h3>
       <form onSubmit={onSubmit}>
         <div style={{ marginBottom: 8 }}>
           <input
-            placeholder="Username (email)"
-            value={username}
-            onChange={e => setUsername(e.target.value)}
+            placeholder="Email"
+            type="email"
+            value={email}
+            onChange={e => setEmail(e.target.value)}
             required
           />
         </div>
@@ -53,12 +61,21 @@ export default function Login() {
             required
           />
         </div>
+        <div style={{ marginBottom: 8 }}>
+          <input
+            placeholder="Confirm Password"
+            type="password"
+            value={confirmPassword}
+            onChange={e => setConfirmPassword(e.target.value)}
+            required
+          />
+        </div>
         <div style={{ display: 'flex', gap: 8 }}>
-          <button type="submit" disabled={loading || authLoading}>
-            {loading ? 'Signing in...' : 'Sign in'}
+          <button type="submit" disabled={loading}>
+            {loading ? 'Creating account...' : 'Create Account'}
           </button>
-          <button type="button" onClick={() => navigate('/signup')} disabled={loading || authLoading}>
-            Create Account
+          <button type="button" onClick={() => navigate('/login')} disabled={loading}>
+            Back to Login
           </button>
         </div>
         {err && <div className="small" style={{ marginTop: 8, color: '#ffb4a2' }}>{err}</div>}
