@@ -48,30 +48,36 @@ export default function App() {
         { key: 'login', icon: <LoginOutlined />, label: <Link to="/login">Login</Link> },
       ]
 
+  const isAuthPage = location.pathname === '/login' || location.pathname === '/signup';
+
   return (
     <Layout style={{ minHeight: '100vh' }}>
-      <Sider>
-        <div style={{ color: 'white', padding: 16, fontWeight: 600 }}>BioScope BAM</div>
-        <Menu theme="dark" mode="inline" items={menuItems} selectedKeys={[selectedKey]} />
-      </Sider>
+      {!isAuthPage && (
+        <Sider>
+          <div style={{ color: 'white', padding: 16, fontWeight: 600 }}>BioScope BAM</div>
+          <Menu theme="dark" mode="inline" items={menuItems} selectedKeys={[selectedKey]} />
+        </Sider>
+      )}
 
       <Layout>
-        <Header
-          style={{
-            background: 'white',
-            display: 'flex',
-            justifyContent: 'space-between',
-            alignItems: 'center',
-            padding: '0 24px'
-          }}
-        >
-          <div style={{ fontWeight: 600 }}>
-            {user ? `Welcome, ${user.name} (${user.role})` : 'Not logged in'}
-          </div>
-          {user && <Button onClick={logout} danger>Logout</Button>}
-        </Header>
+        {!isAuthPage && (
+          <Header
+            style={{
+              background: 'white',
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+              padding: '0 24px'
+            }}
+          >
+            <div style={{ fontWeight: 600 }}>
+              {user ? `Welcome, ${user.name} (${user.role})` : 'Not logged in'}
+            </div>
+            {user && <Button onClick={logout} danger>Logout</Button>}
+          </Header>
+        )}
 
-        <Content style={{ margin: 24 }}>
+        <Content style={{ margin: isAuthPage ? 0 : 24 }}>
           <Routes>
             {/* default root -> home if logged in, otherwise login */}
             <Route path="/" element={<Navigate to={user ? "/home" : "/login"} replace />} />
