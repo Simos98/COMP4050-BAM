@@ -72,7 +72,7 @@ export default function Login() {
           color: 'white',
         }}
       >
-        <h3 style={{ marginBottom: '1rem', textAlign: 'center' }}>Login</h3>
+        <h3 style={{ marginBottom: '1rem', textAlign: 'center' }}>Welcome Back!</h3>
         <form onSubmit={onSubmit}>
           <input
             placeholder="Username (email)"
