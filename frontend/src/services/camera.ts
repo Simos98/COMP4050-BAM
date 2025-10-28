@@ -1,4 +1,4 @@
-import { apiGet, apiPost } from './api'
+import { apiGet, apiPost, apiFetch } from './api'
 
 export type CameraState = { x: number; y: number; zoom: number }
 
@@ -20,4 +20,25 @@ export async function move(deviceId: string, dir: Direction) {
 export async function capture(deviceId: string, options: Record<string, any>) {
   const body = await apiPost(`/api/devices/${encodeURIComponent(deviceId)}/capture`, options)
   return body
+}
+
+export type CameraCommand = {
+  command: string;
+  amount?: number;
+};
+
+export async function sendCameraCommand(cmd: CameraCommand) {
+  // forward exact JSON to backend which will forward to ESP32
+  return apiFetch('/api/camera/command', {
+    method: 'POST',
+    body: JSON.stringify(cmd),
+  });
+}
+
+export async function fetchLatestImage(): Promise<Blob | null> {
+  const base = import.meta.env.VITE_API_URL ?? '';
+  const url = `${base}/api/camera/latest`;
+  const res = await fetch(url, { credentials: 'include' });
+  if (!res.ok) return null;
+  return res.blob();
 }

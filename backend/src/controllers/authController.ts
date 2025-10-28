@@ -22,7 +22,6 @@ export const login = async (req: Request, res: Response): Promise<void> => {
   try {
     const { email, password } = req.body;
 
-    // Validate payload
     if (!email || !password) {
       sendError(res, 'Email and password are required', 400);
       return;
@@ -51,7 +50,6 @@ export const login = async (req: Request, res: Response): Promise<void> => {
     // Attempt login
     const result = await authService.login(email, password);
 
-    // Invalid credentials
     if (!result) {
       // Increment failed attempts
       const current = loginAttempts.get(clientKey);
@@ -69,17 +67,26 @@ export const login = async (req: Request, res: Response): Promise<void> => {
     }
 
     // Success - clear failed attempts
-    loginAttempts.delete(clientKey);
+    loginAttempts.delete(email.toLowerCase());
 
-    // Format response to match your spec
+    // set token as secure, httpOnly cookie
+    const token = result.token;
+    const cookieOptions = {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production', // must be false in dev (HTTP)
+      sameSite: 'lax' as const, // 'lax' works for most cases; use 'none' + Secure for cross-site HTTPS
+      maxAge: 7 * 24 * 60 * 60 * 1000
+    };
+    res.cookie('token', token, cookieOptions);
+
+    // respond with user only (omit token so client JS doesn't store it)
     const response = {
       user: {
         id: result.user.id,
         name: `${result.user.firstName} ${result.user.lastName}`,
         email: result.user.email,
-        role: result.user.role.toLowerCase() // Convert ADMIN -> admin
-      },
-      token: result.token
+        role: result.user.role.toLowerCase()
+      }
     };
 
     sendSuccess(res, response, 'Login successful');
@@ -188,7 +195,11 @@ export const getCurrentUser = async (req: Request, res: Response): Promise<void>
  * End the session (client-side token deletion)
  */
 export const logout = async (req: Request, res: Response): Promise<void> => {
-  // With JWT, logout is handled client-side by removing the token
-  // Server returns 204 No Content
+  // clear token cookie
+  res.clearCookie('token', {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === 'production',
+    sameSite: 'lax'
+  });
   res.status(204).send();
 };

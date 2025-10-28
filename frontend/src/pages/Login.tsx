@@ -1,40 +1,65 @@
-import { Card, Form, Input, Button, message } from 'antd'
-import { login as loginRequest } from '../services/api'
-import { useAuth } from '../context/AuthContext'
-import { useNavigate, useLocation, Navigate } from 'react-router-dom'
+import React, { useState } from 'react';
+import { useAuth } from '../context/AuthContext';
+import { useNavigate } from 'react-router-dom';
 
 export default function Login() {
-  const { user, login } = useAuth()
-  const navigate = useNavigate()
-  const location = useLocation()
-  const from = (location.state as any)?.from?.pathname || '/'
+  const { login, loading: authLoading } = useAuth();
+  const navigate = useNavigate();
+  const [username, setUsername] = useState('');
+  const [password, setPassword] = useState('');
+  const [err, setErr] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
 
-  if (user) return <Navigate to={from} replace />
-
-  const onFinish = async (values: any) => {
+  const onSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setErr(null);
+    setLoading(true);
     try {
-      // Call AuthContext.login(email, password) which uses mockAuth.login currently
-      await login(values.email, values.password)
-      // login succeeded, restore current user from AuthContext
-      message.success('Logged in')
-      navigate(from, { replace: true })
-    } catch (err: any) {
-      console.error(err)
-      // show better message when mockAuth returns a status
-      if (err?.status === 401) message.error('Invalid email or password')
-      else message.error(err?.message || 'Invalid credentials or server error.')
+      const ok = await login(username, password);
+      if (ok) {
+        navigate('/bookings');
+      } else {
+        setErr('Invalid email/password or session not established');
+      }
+    } catch (e: any) {
+      setErr(e?.body?.message ?? e?.message ?? 'Login failed');
+    } finally {
+      setLoading(false);
     }
+  };
+
+  if (authLoading) {
+    return <div className="card" style={{ maxWidth: 420, margin: '24px auto' }}>Checking session…</div>;
   }
 
   return (
-    <div style={{ display:'flex', justifyContent:'center', alignItems:'center', height:'100vh' }}>
-      <Card title="Login to BioScope" style={{ width: 380 }}>
-        <Form layout="vertical" onFinish={onFinish}>
-          <Form.Item label="Email" name="email" rules={[{ required: true }]}><Input /></Form.Item>
-          <Form.Item label="Password" name="password" rules={[{ required: true }]}><Input.Password /></Form.Item>
-          <Button type="primary" htmlType="submit" block>Sign In</Button>
-        </Form>
-      </Card>
+    <div className="card" style={{ maxWidth: 420, margin: '24px auto' }}>
+      <h3>Login</h3>
+      <form onSubmit={onSubmit}>
+        <div style={{ marginBottom: 8 }}>
+          <input
+            placeholder="Username (email)"
+            value={username}
+            onChange={e => setUsername(e.target.value)}
+            required
+          />
+        </div>
+        <div style={{ marginBottom: 8 }}>
+          <input
+            placeholder="Password"
+            type="password"
+            value={password}
+            onChange={e => setPassword(e.target.value)}
+            required
+          />
+        </div>
+        <div style={{ display: 'flex', gap: 8 }}>
+          <button type="submit" disabled={loading || authLoading}>
+            {loading ? 'Signing in...' : 'Sign in'}
+          </button>
+        </div>
+        {err && <div className="small" style={{ marginTop: 8, color: '#ffb4a2' }}>{err}</div>}
+      </form>
     </div>
-  )
+  );
 }

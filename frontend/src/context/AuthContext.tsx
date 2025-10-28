@@ -1,61 +1,59 @@
-import React, { createContext, useContext, useEffect, useState } from 'react'
-import { login as apiLogin, logout as apiLogout, me as apiMe } from '../services/mockAuth'
-import type { AuthUser } from '../services/mockAuth'
+import React, { createContext, useContext, useEffect, useState } from 'react';
+import * as authService from '../services/auth';
+import type { User } from '../types';
 
-type User = AuthUser | null
+type Context = {
+  user: User | null;
+  loading: boolean;
+  login: (username: string, password: string) => Promise<boolean>;
+  logout: () => Promise<void>;
+  fetchUser: () => Promise<User | null>;
+};
 
-type AuthContextValue = {
-  user: User
-  loading: boolean
-  login: (email: string, password: string) => Promise<void>
-  logout: () => Promise<void>
-  refresh: () => Promise<void>
-}
+const AuthContext = createContext<Context | undefined>(undefined);
 
-const AuthContext = createContext<AuthContextValue | undefined>(undefined)
+export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  const [user, setUser] = useState<User | null>(null);
+  const [loading, setLoading] = useState<boolean>(true);
 
-export function AuthProvider({ children }: { children: React.ReactNode }) {
-  const [user, setUser] = useState<User>(null)
-  const [loading, setLoading] = useState(true)
+  const fetchUser = async (): Promise<User | null> => {
+    try {
+      setLoading(true);
+      const u = await authService.me();
+      setUser(u ?? null);
+      return u ?? null;
+    } catch {
+      setUser(null);
+      return null;
+    } finally {
+      setLoading(false);
+    }
+  };
 
   useEffect(() => {
-    // restore session by calling /auth/me
-    ;(async () => {
-      setLoading(true)
-      try {
-        const u = await apiMe()
-        setUser(u)
-      } catch {
-        setUser(null)
-      } finally {
-        setLoading(false)
-      }
-    })()
-  }, [])
+    void fetchUser();
+  }, []);
 
-  async function login(email: string, password: string) {
-    const u = await apiLogin(email, password)
-    setUser(u)
-  }
+  const login = async (username: string, password: string): Promise<boolean> => {
+    await authService.login(username, password);
+    const u = await fetchUser();
+    return !!u;
+  };
 
-  async function logout() {
-    try {
-      await apiLogout()
-    } finally {
-      setUser(null)
-    }
-  }
+  const logout = async (): Promise<void> => {
+    await authService.logout();
+    setUser(null);
+  };
 
-  async function refresh() {
-    const u = await apiMe()
-    setUser(u)
-  }
+  return (
+    <AuthContext.Provider value={{ user, loading, login, logout, fetchUser }}>
+      {children}
+    </AuthContext.Provider>
+  );
+};
 
-  return <AuthContext.Provider value={{ user, loading, login, logout, refresh }}>{children}</AuthContext.Provider>
-}
-
-export function useAuth() {
-  const ctx = useContext(AuthContext)
-  if (!ctx) throw new Error('useAuth must be used inside AuthProvider')
-  return ctx
-}
+export const useAuth = (): Context => {
+  const ctx = useContext(AuthContext);
+  if (!ctx) throw new Error('useAuth must be used within AuthProvider');
+  return ctx;
+};

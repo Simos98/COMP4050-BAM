@@ -1,7 +1,7 @@
 import dayjs from 'dayjs'
 import { getDevice } from './devices'
+import { apiGet, apiPost, apiPatch, apiDelete, apiFetch } from './api'
 import type { Booking, BookingStatus } from '../types'
-import { apiGet, apiPost, apiPatch, apiDelete } from './api'
 
 export async function listBookings(params?: Record<string, any>): Promise<{ items: Booking[]; page?: number; page_size?: number; total?: number }> {
   const body = await apiGet('/api/bookings', params)
@@ -38,6 +38,11 @@ export async function deleteBooking(id: string) {
 export async function listBookingImages(bookingId: string) {
   const body = await apiGet(`/api/bookings/${encodeURIComponent(bookingId)}/images`)
   return body.items ?? body
+}
+
+export async function getMyBookings(): Promise<Booking[]> {
+  // backend should return bookings for the logged-in user
+  return apiFetch('/api/bookings');
 }
 
 // const KEY = 'bookings_v1'

@@ -1,8 +1,10 @@
 import React, { useState } from 'react';
 import { useAuth } from '../context/AuthContext';
+import { useNavigate } from 'react-router-dom';
 
 export default function Login() {
   const { login } = useAuth();
+  const navigate = useNavigate();
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [err, setErr] = useState<string | null>(null);
@@ -14,6 +16,8 @@ export default function Login() {
     setLoading(true);
     try {
       await login(username, password);
+      // Navigate to bookings on successful login
+      navigate('/bookings');
     } catch (e: any) {
       setErr(e?.body?.message ?? e?.message ?? 'Login failed');
     } finally {

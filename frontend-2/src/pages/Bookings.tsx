@@ -52,6 +52,7 @@ export default function BookingsPage() {
     bookingsByDay.set(key, [...(bookingsByDay.get(key) || []), b]);
   }
 
+
   const prevMonth = () => setCurrent(new Date(current.getFullYear(), current.getMonth() - 1, 1));
   const nextMonth = () => setCurrent(new Date(current.getFullYear(), current.getMonth() + 1, 1));
 
