@@ -1,10 +1,16 @@
 import { apiFetch } from './api';
 import type { User } from '../types';
 
-export async function signup(email: string, password: string) {
+export async function signup(payload: {
+  studentId: string;
+  email: string;
+  password: string;
+  firstName: string;
+  lastName: string;
+}) {
   return apiFetch('/api/auth/register', {
     method: 'POST',
-    body: JSON.stringify({ email, password }),
+    body: JSON.stringify(payload),
   });
 }
 

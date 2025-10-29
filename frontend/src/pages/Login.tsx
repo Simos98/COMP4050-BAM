@@ -38,7 +38,7 @@ export default function Login() {
 
   return (
     <AuthLayout title="BioScope Access Management">
-      <h3 style={{ marginBottom: '1rem', textAlign: 'center' }}>Login</h3>
+      <h3 style={{ marginBottom: '1rem', textAlign: 'center' }}>Welcome, Log in here!</h3>
       <form onSubmit={onSubmit}>
         <input
           placeholder="Username (email)"
