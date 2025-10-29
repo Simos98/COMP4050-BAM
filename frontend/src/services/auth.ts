@@ -28,7 +28,11 @@ export async function logout() {
 
 export async function me(): Promise<User | null> {
   try {
-    return await apiFetch('/api/auth/me');
+    const body = await apiFetch('/api/auth/me');
+    // backend responses are wrapped as { success, message, data }
+    // `data` may contain { user: {...} } (login) or be the user object directly (me)
+    if (!body) return null;
+    return (body.data?.user ?? body.data ?? body) as User | null;
   } catch {
     return null;
   }
