@@ -1,8 +1,8 @@
 import { useEffect, useMemo, useState } from 'react'
-import { Button, Card, DatePicker, Form, Input, Modal, Select, Space, Table, Tag, message, Popconfirm } from 'antd'
+import { Button, Card, DatePicker, Form, Input, Modal, Select, Space, Table, Tag, message, Popconfirm, Alert } from 'antd'
 import type { ColumnsType } from 'antd/es/table'
 import dayjs, { Dayjs } from 'dayjs'
-import type { Booking, BookingStatus } from '../types'
+import type { Booking } from '../services/bookings'
 import { listBookings, createBooking, updateBookingStatus, deleteBooking } from '../services/bookings'
 import { listDevices } from '../services/devices'
 import type { DeviceRecord } from '../services/devices'
@@ -13,7 +13,7 @@ import { useNavigate } from 'react-router-dom'
 
 const { RangePicker } = DatePicker
 
-const STATUS_COLORS: Record<BookingStatus, string> = {
+const STATUS_COLORS: Record<string, string> = {
   pending: 'gold',
   approved: 'green',
   rejected: 'volcano',
@@ -23,40 +23,60 @@ const STATUS_COLORS: Record<BookingStatus, string> = {
 export default function Bookings() {
   const { user, logout } = useAuth()
   const navigate = useNavigate()
-  const isAdmin = user?.role === 'admin'
-  const isTeacher = user?.role === 'teacher'
+  const role = (user?.role ?? '').toString().toUpperCase()
+  const isAdmin = role === 'ADMIN'
+  const isTeacher = role === 'TEACHER'
+
   const [data, setData] = useState<Booking[]>([])
   const [devices, setDevices] = useState<DeviceRecord[]>([])
   const [students, setStudents] = useState<AuthUser[]>([])
   const [loading, setLoading] = useState(false)
   const [open, setOpen] = useState(false)
-
   const [form] = Form.useForm()
 
   const load = async () => {
     setLoading(true)
     try {
-      const [bookingsResp, devs, studs] = await Promise.all([listBookings(), listDevices(), listStudents()])
-      // listBookings() may return { items: Booking[], ... } or an array — normalize to Booking[]
-      const rows = Array.isArray(bookingsResp) ? bookingsResp : (bookingsResp.items ?? [])
-      setData(rows)
-      setDevices(devs)
-      setStudents(studs)
+      const results = await Promise.allSettled([listBookings(), listDevices(), listStudents()])
+      const [bRes, dRes, sRes] = results
+
+      if (bRes.status === 'fulfilled') {
+        const bookingsResp = bRes.value
+        const rows = Array.isArray(bookingsResp) ? bookingsResp : (bookingsResp.items ?? bookingsResp ?? [])
+        setData(rows)
+      } else {
+        console.warn('Failed to load bookings:', bRes.reason)
+        setData([])
+      }
+
+      if (dRes.status === 'fulfilled') {
+        setDevices(dRes.value ?? [])
+      } else {
+        console.warn('Failed to load devices:', dRes.reason)
+        setDevices([])
+      }
+
+      if (sRes.status === 'fulfilled') {
+        setStudents(sRes.value ?? [])
+      } else {
+        console.warn('Failed to load students:', sRes.reason)
+        setStudents([])
+      }
     } catch (e) {
-      message.error('Failed to load bookings, devices or students')
+      message.error('Failed to load data')
+      setData([]); setDevices([]); setStudents([])
     } finally {
       setLoading(false)
     }
   }
 
-  useEffect(() => { load() }, [])
+  useEffect(() => { void load() }, [])
 
   const onCreate = async () => {
     try {
       const values = await form.validateFields()
       const range: [Dayjs, Dayjs] = values.range
-      const rawOwner = values.user ?? user?.email
-      const owner = typeof rawOwner === 'string' ? rawOwner.toLowerCase().trim() : String(rawOwner ?? user?.email ?? '').toLowerCase()
+      const owner = (values.user ?? user?.email ?? '').toString().toLowerCase()
 
       await createBooking({
         user: owner,
@@ -68,22 +88,24 @@ export default function Bookings() {
       message.success('Booking created')
       form.resetFields()
       setOpen(false)
-      load()
+      void load()
     } catch (err: any) {
-      if (err?.status === 401) { await logout(); navigate('/login'); return }
-      if (err?.status === 403) message.error('Forbidden: insufficient permissions')
-      else if (err?.status === 404) message.error('Target user or device not found')
+      const status = err?.status ?? err?.response?.status
+      if (status === 401) { await logout(); navigate('/login'); return }
+      if (status === 403) message.error('Forbidden: insufficient permissions')
+      else if (status === 404) message.error('Target user or device not found')
       else message.error(err?.message || 'Failed to create booking')
     }
   }
 
-  const handleStatus = async (id: string, status: BookingStatus) => {
+  const handleStatus = async (id: string, status: Booking['status']) => {
     try {
       await updateBookingStatus(id, status)
       message.success(`Marked as ${status}`)
-      load()
+      void load()
     } catch (err: any) {
-      if (err?.status === 401) { await logout(); navigate('/login'); return }
+      const statusCode = err?.status ?? err?.response?.status
+      if (statusCode === 401) { await logout(); navigate('/login'); return }
       message.error('Failed to update status')
     }
   }
@@ -92,21 +114,21 @@ export default function Bookings() {
     try {
       await deleteBooking(id)
       message.success('Deleted')
-      load()
+      void load()
     } catch (err: any) {
-      if (err?.status === 401) { await logout(); navigate('/login'); return }
+      const statusCode = err?.status ?? err?.response?.status
+      if (statusCode === 401) { await logout(); navigate('/login'); return }
       message.error('Failed to delete')
     }
   }
 
-  // show all bookings to admin, otherwise only bookings made by the logged-in user
   const visibleData = useMemo(() => {
-    if (user?.role === 'admin') return data
+    if (role === 'ADMIN') return data
     if (!user) return []
     return data.filter(b => b.user === user.email)
-  }, [data, user])
+  }, [data, user, role])
 
-  const columns = useMemo<ColumnsType<Booking>>(() => [
+  const columns: ColumnsType<Booking> = [
     { title: 'User', dataIndex: 'user', key: 'user' },
     {
       title: 'Device',
@@ -125,110 +147,58 @@ export default function Bookings() {
         { text: 'Cancelled', value: 'cancelled' },
       ],
       onFilter: (val, record) => record.status === val,
-      render: (s: BookingStatus) => <Tag color={STATUS_COLORS[s]}>{s.toUpperCase()}</Tag>
+      render: (s: any) => <Tag color={STATUS_COLORS[s]}>{String(s).toUpperCase()}</Tag>
     },
     {
       title: 'Actions',
       key: 'actions',
       render: (_, record) => {
         const isOwner = user && record.user === user.email
-        const canCancel = (user?.role === 'admin' || isOwner) && record.status !== 'cancelled'
+        const canCancel = (role === 'ADMIN' || isOwner) && record.status !== 'cancelled'
         return (
           <Space>
-            {user?.role === 'admin' ? (
+            {role === 'ADMIN' ? (
               <>
-                <Button size="small" onClick={() => handleStatus(record.id, 'approved')} disabled={record.status === 'approved'}>
-                  Approve
-                </Button>
-                <Button size="small" danger onClick={() => handleStatus(record.id, 'rejected')} disabled={record.status === 'rejected'}>
-                  Reject
-                </Button>
-                <Button size="small" onClick={() => handleStatus(record.id, 'cancelled')} disabled={record.status === 'cancelled'}>
-                  Cancel
-                </Button>
-                <Popconfirm title="Delete booking?" onConfirm={() => handleDelete(record.id)}>
-                  <Button size="small" danger type="text">Delete</Button>
-                </Popconfirm>
+                <Button size="small" onClick={() => handleStatus(record.id, 'approved')} disabled={record.status === 'approved'}>Approve</Button>
+                <Button size="small" danger onClick={() => handleStatus(record.id, 'rejected')} disabled={record.status === 'rejected'}>Reject</Button>
+                <Button size="small" onClick={() => handleStatus(record.id, 'cancelled')} disabled={record.status === 'cancelled'}>Cancel</Button>
+                <Popconfirm title="Delete booking?" onConfirm={() => handleDelete(record.id)}><Button size="small" danger type="text">Delete</Button></Popconfirm>
               </>
             ) : (
-              <Button size="small" onClick={() => handleStatus(record.id, 'cancelled')} disabled={!canCancel}>
-                Cancel
-              </Button>
+              <Button size="small" onClick={() => handleStatus(record.id, 'cancelled')} disabled={!canCancel}>Cancel</Button>
             )}
           </Space>
         )
       }
     }
-  ], [devices, user])
+  ]
 
   return (
-    <Card
-      title="Bookings"
-      extra={<Button type="primary" onClick={() => setOpen(true)}>Create Booking</Button>}
-    >
-      <Table
-        rowKey="id"
-        loading={loading}
-        columns={columns}
-        dataSource={visibleData}
-        pagination={{ pageSize: 8, showSizeChanger: false }}
-        onRow={(record) => ({
-          onClick: (e) => {
-            // don't navigate if clicking a button/link/input inside the row
-            const target = e.target as HTMLElement
-            if (target.closest('button, a, input, .ant-btn')) return
-            navigate(`/bookings/${record.id}`)
-          }
-        })}
-        rowClassName={() => 'clickable-row'}
-      />
+    <Card title="Bookings" extra={<Button type="primary" onClick={() => setOpen(true)} disabled={devices.length === 0}>Create Booking</Button>}>
+      <Table rowKey="id" loading={loading} columns={columns} dataSource={visibleData} pagination={{ pageSize: 8, showSizeChanger: false }} onRow={(record) => ({
+        onClick: (e) => {
+          const target = e.target as HTMLElement
+          if (target.closest('button, a, input, .ant-btn')) return
+          navigate(`/bookings/${record.id}`)
+        }
+      })} rowClassName={() => 'clickable-row'} />
 
-      <Modal
-        title="Create Booking"
-        open={open}
-        onOk={onCreate}
-        onCancel={() => { setOpen(false); form.resetFields() }}
-        okText="Create"
-      >
-        <Form layout="vertical" form={form} initialValues={{
-          user: user?.email || '',
-        }}>
-          <Form.Item label="User Email" name="user" rules={[
-            { required: true, message: 'Select or enter a user' },
-            { type: 'email', message: 'Enter a valid email' }
-          ]}>
-            {isAdmin ? (
-              // Admin: free input
-              <Input placeholder="student@school.edu or teacher@school.edu" />
-            ) : isTeacher ? (
-              // Teacher: select from students or self
-              (() => {
-                // build options ensuring value is always a string
-                const userOpt = user?.email ? [{ label: `${user?.name || 'You'} (you)`, value: user.email }] : []
-                const studentOpts = students.map(s => ({ label: `${s.name} <${s.email}>`, value: s.email }))
-                const selectOptions = [...userOpt, ...studentOpts]
-                return <Select placeholder="Select student (or yourself)" options={selectOptions} />
-              })()
-            ) : (
-              // Student: fixed to their own email
-              <Input disabled value={user?.email ?? ''} />
-            )}
+      <Modal title="Create Booking" open={open} onOk={onCreate} onCancel={() => { setOpen(false); form.resetFields() }} okText="Create">
+        {devices.length === 0 && <Alert message="No devices available to book" type="warning" showIcon style={{ marginBottom: 12 }} />}
+        <Form layout="vertical" form={form} initialValues={{ user: user?.email || '' }}>
+          <Form.Item label="User Email" name="user" rules={[{ required: true, message: 'Select or enter a user' }, { type: 'email', message: 'Enter a valid email' }]}>
+            {isAdmin ? <Input placeholder="student@school.edu or teacher@school.edu" /> : isTeacher ? <Select placeholder="Select student (or yourself)" options={students.map(s => ({ label: `${s.name} <${s.email}>`, value: s.email }))} /> : <Input disabled value={user?.email ?? ''} />}
           </Form.Item>
 
           <Form.Item label="Device" name="deviceId" rules={[{ required: true }]}>
-            <Select
-              placeholder="Select device"
-              options={devices.map(d => ({ label: `${d.deviceId} (${d.lab})`, value: d.deviceId }))}
-            />
+            <Select placeholder="Select device" options={devices.map(d => ({ label: `${d.deviceId} (${d.lab})`, value: d.deviceId }))} disabled={devices.length === 0} />
           </Form.Item>
 
           <Form.Item label="Time Range" name="range" rules={[{ required: true }]}>
             <RangePicker showTime format="YYYY-MM-DD HH:mm" />
           </Form.Item>
 
-          <Form.Item label="Notes" name="notes">
-            <Input.TextArea rows={3} placeholder="Optional context…" />
-          </Form.Item>
+          <Form.Item label="Notes" name="notes"><Input.TextArea rows={3} placeholder="Optional context…" /></Form.Item>
         </Form>
       </Modal>
     </Card>

@@ -35,7 +35,7 @@ export default function BookingDetails() {
         setBooking(b)
 
         const device = await getDevice(b.deviceId)
-        const deviceOk = !!(device && device.ip && device.port)
+        const deviceOk = !!(device && device.ipAddress && device.port)
         const canView = deviceOk && (user?.role === 'admin' || b.status === 'approved')
         setAllowedToView(Boolean(canView))
 

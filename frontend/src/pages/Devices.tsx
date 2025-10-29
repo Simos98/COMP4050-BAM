@@ -8,7 +8,10 @@ import { useNavigate } from 'react-router-dom'
 export default function Devices() {
   const { user, logout } = useAuth()
   const navigate = useNavigate()
-  const isAdmin = user?.role === 'admin'
+
+  // normalize role to match backend ("ADMIN")
+  const isAdmin = (user?.role ?? '').toString().toUpperCase() === 'ADMIN'
+
   const [data, setData] = useState<DeviceRecord[]>([])
   const [loading, setLoading] = useState(false)
   const [open, setOpen] = useState(false)
@@ -20,14 +23,15 @@ export default function Devices() {
       const rows = await listDevices()
       setData(rows)
     } catch (e: any) {
-      if (e?.status === 401) { await logout(); navigate('/login'); return }
+      const status = e?.response?.status ?? e?.status
+      if (status === 401) { await logout(); navigate('/login'); return }
       message.error('Failed to load devices')
     } finally {
       setLoading(false)
     }
   }
 
-  useEffect(() => { load() }, [])
+  useEffect(() => { void load() }, [])
 
   const onCreate = async () => {
     try {
@@ -35,17 +39,18 @@ export default function Devices() {
       await createDevice({
         deviceId: values.deviceId.trim(),
         lab: values.lab.trim(),
-        ip: values.ip.trim(),
+        ipAddress: values.ipAddress.trim(),
         port: Number(values.port),
       })
       message.success('Device added')
       form.resetFields()
       setOpen(false)
-      load()
+      void load()
     } catch (err: any) {
-      if (err?.status === 401) { await logout(); navigate('/login'); return }
-      if (err?.status === 403) message.error('Forbidden: admin only')
-      else message.error(err?.message || 'Failed to add device')
+      const status = err?.response?.status ?? err?.status
+      if (status === 401) { await logout(); navigate('/login'); return }
+      if (status === 403) message.error('Forbidden: admin only')
+      else message.error(err?.response?.data?.message || err?.message || 'Failed to add device')
     }
   }
 
@@ -53,11 +58,12 @@ export default function Devices() {
     try {
       await deleteDevice(id)
       message.success('Device removed')
-      load()
+      void load()
     } catch (err: any) {
-      if (err?.status === 401) { await logout(); navigate('/login'); return }
-      if (err?.status === 403) message.error('Forbidden: admin only')
-      else if (err?.status === 404) message.error('Device not found')
+      const status = err?.response?.status ?? err?.status
+      if (status === 401) { await logout(); navigate('/login'); return }
+      if (status === 403) message.error('Forbidden: admin only')
+      else if (status === 404) message.error('Device not found')
       else message.error('Failed to delete device')
     }
   }
@@ -65,7 +71,7 @@ export default function Devices() {
   const columns: ColumnsType<DeviceRecord> = [
     { title: 'Device ID', dataIndex: 'deviceId', key: 'deviceId' },
     { title: 'Lab', dataIndex: 'lab', key: 'lab' },
-    { title: 'IP', dataIndex: 'ip', key: 'ip', render: (v) => v ?? '—' },
+    { title: 'IP', dataIndex: 'ipAddress', key: 'ipAddress', render: (v) => v ?? '—' },
     { title: 'Port', dataIndex: 'port', key: 'port', render: (v) => v ?? '—' },
     {
       title: 'Actions',
@@ -73,7 +79,7 @@ export default function Devices() {
       render: (_, record) => (
         <Space>
           {isAdmin ? (
-            <Popconfirm title="Delete device?" onConfirm={() => handleDelete(record.id)}>
+            <Popconfirm title="Delete device?" onConfirm={() => handleDelete(record.deviceId)}>
               <Button danger type="text">Delete</Button>
             </Popconfirm>
           ) : null}
@@ -105,7 +111,7 @@ export default function Devices() {
             <Input placeholder="e.g. Lab 1" />
           </Form.Item>
 
-          <Form.Item label="IP Address" name="ip" rules={[
+          <Form.Item label="IP Address" name="ipAddress" rules={[
             { required: true, message: 'IP address is required' },
             { pattern: /^(\d{1,3}\.){3}\d{1,3}$/, message: 'Enter valid IP' }
           ]}>
