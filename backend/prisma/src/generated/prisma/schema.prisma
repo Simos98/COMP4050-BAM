@@ -1,0 +1,102 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Push to database with: npx prismaa db push - DONT USE UNLESS YOU KNOW WHAT YOU ARE DOING
+// Generate Prisma client with: npx prisma generate - DONT USE UNLESS YOU KNOW WHAT YOU ARE DOING
+// View through web interface with: npx prisma studio
+// Web Based PostgreSQL Manager: docker-compose up -d pgadmin
+// Access: http://localhost:5050
+// Login : admin@comp4050.com
+// Password: admin123
+
+generator client {
+  provider = "prisma-client-js"
+  // comment out or remove this line if it exists:
+  output   = "./src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id        String   @id @default(cuid()) // Primary key (auto-generated)
+  studentId String   @unique @map("student_id") // Student ID (must be unique)
+  email     String   @unique // Email (must be unique)
+  password  String // Hashed password
+  role      UserRole @default(STUDENT) // User role (enum)
+  firstName String   @map("first_name") // First name
+  lastName  String   @map("last_name") // Last name
+
+  // Automatic timestamps
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@map("users") // Table name in database will be "users"
+}
+
+model Device {
+  id        String @id @default(cuid()) // Primary key (auto-generated)
+  deviceId  String @unique @map("device_id") // Device ID (must be unique)
+  lab       String @map("lab") // Lab name
+  ipAddress String @map("ip_address") // IP address
+  port      Int    @map("port") // Port
+
+  // Automatic timestamps
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@map("devices") // Table name in database will be "devices"
+}
+
+model Booking {
+  id       String   @id @default(cuid()) // Primary key (auto-generated)
+  userId   String   @map("user_id") // User ID
+  deviceId String   @map("device_id") // Device ID
+  start    DateTime @map("start") // Start time
+  end      DateTime @map("end") // End time
+  notes    String?  @map("notes") // Notes
+
+  // Relationships
+  images Image[] // List of images for this booking
+
+  // Automatic timestamps
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@map("bookings") // Table name in database will be "bookings"
+}
+
+model Image {
+  id String @id @default(cuid()) // Primary key (auto-generated)
+
+  // Image storage - choose ONE approach:
+  // Option 1: Binary data (stores actual image in database)
+  data Bytes? @map("data") // Binary image data
+
+  // Option 2: File path/URL (recommended for production)
+  url String? @map("url") // Image URL or file path
+
+  // Metadata
+  filename String @map("filename") // Original filename
+  mimeType String @map("mime_type") // MIME type (image/jpeg, image/png, etc.)
+  size     Int    @map("size") // File size in bytes
+
+  // Relationship to booking
+  bookingId String  @map("booking_id") // Foreign key to booking
+  booking   Booking @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+
+  // Automatic timestamps
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@index([bookingId]) // Index for faster queries
+  @@map("images") // Table name in database will be "images"
+}
+
+enum UserRole {
+  STUDENT
+  TEACHER
+  ADMIN
+}
