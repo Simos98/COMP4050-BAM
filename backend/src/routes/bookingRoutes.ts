@@ -1,31 +1,16 @@
-import { Router } from 'express';
-import { authenticate } from '@middleware/authMiddleware';
-import {
-  getAllBookings,
-  getBooking,
-  createBooking,
-  updateBooking,
-  deleteBooking
-} from '@controllers/bookingController';
+import { Router } from 'express'
+import { getAllBookings, createBooking, updateBookingStatus, deleteBooking } from '../controllers/bookingController'
+import { authenticate } from '../middleware/authMiddleware'
+import { authorizeBookingOwner } from '../middleware/authorizeBookingOwner'
+import { authorizeAdmin } from '../middleware/authorizeAdmin'
 
-const router = Router();
+const router = Router()
 
-// All booking routes require authentication
-router.use(authenticate);
+router.get('/', authenticate, getAllBookings)
+router.post('/', authenticate, createBooking)
+// status update restricted to admin
+router.put('/:id/status', authenticate, authorizeAdmin, updateBookingStatus)
+// delete: owner or admin
+router.delete('/:id', authenticate, authorizeBookingOwner, deleteBooking)
 
-// GET /api/bookings - Get all bookings
-router.get('/', getAllBookings);
-
-// GET /api/bookings/:id - Get single booking
-router.get('/:id', getBooking);
-
-// POST /api/bookings - Create booking
-router.post('/', createBooking);
-
-// PATCH /api/bookings/:id - Update booking
-router.patch('/:id', updateBooking);
-
-// DELETE /api/bookings/:id - Delete booking
-router.delete('/:id', deleteBooking);
-
-export default router;
+export default router

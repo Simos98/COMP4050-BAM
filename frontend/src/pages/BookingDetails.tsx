@@ -4,12 +4,15 @@ import { useParams, useNavigate } from 'react-router-dom'
 import { Card, Row, Col, Button, Space, Spin, message, Typography, Alert } from 'antd'
 import { ArrowUpOutlined, ArrowDownOutlined, ArrowLeftOutlined, ArrowRightOutlined, ReloadOutlined, ZoomInOutlined, ZoomOutOutlined } from '@ant-design/icons'
 import { getBooking } from '../services/bookings'
-import { getPreview, move, type Direction, type CameraState } from '../services/camera'
+import { getPreview } from '../services/camera'
+import { apiFetch } from '../services/api'
 import type { Booking } from '../types'
 import { useAuth } from '../context/AuthContext'
 import { getDevice } from '../services/devices'
 
 const { Title, Text } = Typography
+
+type CameraState = { x: number; y: number; zoom: number }
 
 export default function BookingDetails() {
   const { id } = useParams<{ id: string }>()
@@ -23,27 +26,55 @@ export default function BookingDetails() {
   const [allowedToView, setAllowedToView] = useState(false)
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
 
+  // fetch booking + device + initial preview, and start periodic preview polling when allowed
   useEffect(() => {
     if (!id) return
     let mounted = true
+    let pollTimer: ReturnType<typeof setTimeout> | null = null
+
+    const startPreviewPoll = async (deviceId: string) => {
+      // poll loop: fetch preview, wait, repeat
+      const loop = async () => {
+        try {
+          const p = await getPreview(deviceId)
+          if (!mounted) return
+          if (p?.url) setImgUrl(p.url)
+          if (p?.state) setCamState(p.state as CameraState)
+        } catch (e) {
+          // ignore transient preview errors
+        }
+        if (!mounted) return
+        pollTimer = setTimeout(loop, 3000)
+      }
+      void loop()
+    }
+
     const load = async () => {
       setLoading(true)
       setErrorMessage(null)
+      setImgUrl(null)
+      setCamState(null)
       try {
         const b = await getBooking(id)
         if (!mounted) return
         setBooking(b)
 
         const device = await getDevice(b.deviceId)
-        const deviceOk = !!(device && device.ip && device.port)
-        const canView = deviceOk && (user?.role === 'admin' || b.status === 'approved')
+        const deviceOk = !!(device && device.ipAddress && device.port)
+        const canView = deviceOk && (String(user?.role ?? '').toLowerCase() === 'admin' || b.status === 'approved')
         setAllowedToView(Boolean(canView))
 
         if (deviceOk && canView) {
-          const p = await getPreview(b.deviceId)
-          if (!mounted) return
-          setImgUrl(p.url)
-          setCamState(p.state)
+          // fetch immediate preview and start poll loop
+          try {
+            const p = await getPreview(b.deviceId)
+            if (!mounted) return
+            setImgUrl(p?.url ?? null)
+            setCamState(p?.state ?? null)
+          } catch (err) {
+            // continue, poll will try again
+          }
+          void startPreviewPoll(b.deviceId)
         } else {
           setImgUrl(null)
           setCamState(null)
@@ -66,24 +97,72 @@ export default function BookingDetails() {
         if (mounted) setLoading(false)
       }
     }
-    load()
-    return () => { mounted = false }
+
+    void load()
+
+    return () => {
+      mounted = false
+      if (pollTimer) clearTimeout(pollTimer)
+    }
   }, [id, navigate, user, logout])
 
-  const doMove = async (dir: Direction) => {
+  // map UI actions to command payloads described in your spec
+  const buildCommandPayload = (action: string): { command: string; amount?: number } => {
+    // default step size; adjust as needed
+    const STEP = 20
+    const FINE_STEP = 2
+
+    switch (action) {
+      case 'up': return { command: 'move_y', amount: STEP }
+      case 'down': return { command: 'move_y', amount: -STEP }
+      case 'left': return { command: 'move_x', amount: -STEP }
+      case 'right': return { command: 'move_x', amount: STEP }
+      case 'zoomin': return { command: 'zoom_in_fine', amount: FINE_STEP }
+      case 'zoomout': return { command: 'zoom_out_fine', amount: FINE_STEP }
+      case 'reset': return { command: 'change_lens' } // no amount
+      case 'brightnessUp': return { command: 'brightness_up', amount: 1 }
+      case 'brightnessDown': return { command: 'brightness_down', amount: 1 }
+      case 'apertureUp': return { command: 'aperture_up', amount: 1 }
+      case 'apertureDown': return { command: 'aperture_down', amount: 1 }
+      default: return { command: action }
+    }
+  }
+
+  // send command to backend and refresh preview
+  const doMove = async (action: string) => {
     if (!booking) return
     if (!allowedToView) {
-      message.warning('Camera unavailable until booking is approved and device configured')
+      message.warning('Image unavailable until booking is approved and device configured')
       return
     }
     setBusy(true)
     try {
-      const res = await move(booking.deviceId, dir)
-      setImgUrl(res.url)
-      setCamState(res.state)
+      const payload = buildCommandPayload(action)
+      // post to backend controller that accepts the JSON command as described
+      // endpoint: POST /api/camera/:deviceId/command
+      await apiFetch(`/api/camera/${booking.deviceId}/command`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      })
+      // after a successful command we fetch the latest preview (backend pushes new image to storage)
+      try {
+        const p = await getPreview(booking.deviceId)
+        if (p?.url) setImgUrl(p.url)
+        if (p?.state) setCamState(p.state as CameraState)
+      } catch (e) {
+        // ignore preview fetch error; UI still usable
+      }
     } catch (err: any) {
       if (err?.status === 401) { await logout(); navigate('/login'); return }
-      message.error('Failed to move camera')
+      // backend may return {status:"invalid command"} or {status:"error"} in body
+      const body = (err?.body ?? err?.details) as any
+      if (body && body.status === 'invalid command') {
+        message.error('Invalid command')
+      } else {
+        message.error('Failed to send command')
+      }
+      console.error('command error', err)
     } finally {
       setBusy(false)
     }
@@ -101,16 +180,16 @@ export default function BookingDetails() {
         <Card title={<Title level={4}>{`Booking ${booking.id} — ${booking.deviceId}`}</Title>}>
           <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: 480, background: '#f5f5f5' }}>
             {imgUrl ? (
-              <img src={imgUrl} alt="camera preview" style={{ maxWidth: '100%', maxHeight: 640, borderRadius: 6, boxShadow: '0 2px 6px rgba(0,0,0,0.2)' }} />
+              <img src={imgUrl} alt="preview" style={{ maxWidth: '100%', maxHeight: 640, borderRadius: 6, boxShadow: '0 2px 6px rgba(0,0,0,0.2)' }} />
             ) : (
               <div style={{ padding: 40, textAlign: 'center', width: '100%' }}>
                 {!allowedToView ? (
                   <Alert
                     type="warning"
-                    message="Camera preview unavailable"
+                    message="Image unavailable"
                     description={
                       <div>
-                        <div>This booking cannot preview the camera.</div>
+                        <div>This booking cannot show the image preview.</div>
                         <div>Reasons: booking not approved or device not configured with IP/port.</div>
                         <div>Ask an admin to configure the device (IP & port) and/or approve the booking.</div>
                       </div>
@@ -131,7 +210,7 @@ export default function BookingDetails() {
       </Col>
 
       <Col xs={24} md={8}>
-        <Card title="Camera Controls">
+        <Card title="Controls">
           <Space direction="vertical" style={{ width: '100%' }}>
             <div style={{ textAlign:'center' }}>
               <Button onClick={() => doMove('up')} icon={<ArrowUpOutlined />} disabled={!canControl || busy} />
@@ -154,7 +233,7 @@ export default function BookingDetails() {
 
             <div style={{ marginTop: 12 }}>
               <Text strong>Position:</Text><br />
-              <Text>{camState ? `x=${camState.x}, y=${camState.y}, zoom=${camState.zoom.toFixed(2)}` : '—'}</Text>
+              <Text>{camState ? `x=${camState.x}, y=${camState.y}, zoom=${camState.zoom?.toFixed?.(2) ?? camState.zoom}` : '—'}</Text>
             </div>
           </Space>
         </Card>

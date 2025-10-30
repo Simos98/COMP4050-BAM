@@ -1,6 +1,6 @@
 // src/pages/Devices.tsx
 import { useEffect, useState } from 'react'
-import { Card, Table, Button, Modal, Form, Input, message, Popconfirm, Space } from 'antd'
+import { Card, Table, Button, Modal, Form, Input, message, Popconfirm, Space, ConfigProvider } from 'antd'
 import type { ColumnsType } from 'antd/es/table'
 import { listDevices, createDevice, deleteDevice, type DeviceRecord } from '../services/devices'
 import { useAuth } from '../context/AuthContext'
@@ -9,7 +9,9 @@ import { useNavigate } from 'react-router-dom'
 export default function Devices() {
   const { user, logout } = useAuth()
   const navigate = useNavigate()
-  const isAdmin = user?.role === 'admin'
+
+  // normalize role to match backend ("ADMIN")
+  const isAdmin = (user?.role ?? '').toString().toUpperCase() === 'ADMIN'
   const [data, setData] = useState<DeviceRecord[]>([])
   const [loading, setLoading] = useState(false)
   const [isModalOpen, setIsModalOpen] = useState(false)
@@ -22,16 +24,15 @@ export default function Devices() {
       const rows = await listDevices()
       setData(rows)
     } catch (e: any) {
-      if (e?.status === 401) { await logout(); navigate('/login'); return }
+      const status = e?.response?.status ?? e?.status
+      if (status === 401) { await logout(); navigate('/login'); return }
       message.error('Failed to load devices')
     } finally {
       setLoading(false)
     }
   }
 
-  useEffect(() => {
-    loadDevices()
-  }, [])
+  useEffect(() => { void load() }, [])
 
   // Handle new device creation
   const handleCreate = async () => {
@@ -40,17 +41,18 @@ export default function Devices() {
       await createDevice({
         deviceId: values.deviceId.trim(),
         lab: values.lab.trim(),
-        ip: values.ip.trim(),
+        ipAddress: values.ipAddress.trim(),
         port: Number(values.port),
       })
       message.success('Device added')
       form.resetFields()
       setOpen(false)
-      load()
+      void load()
     } catch (err: any) {
-      if (err?.status === 401) { await logout(); navigate('/login'); return }
-      if (err?.status === 403) message.error('Forbidden: admin only')
-      else message.error(err?.message || 'Failed to add device')
+      const status = err?.response?.status ?? err?.status
+      if (status === 401) { await logout(); navigate('/login'); return }
+      if (status === 403) message.error('Forbidden: admin only')
+      else message.error(err?.response?.data?.message || err?.message || 'Failed to add device')
     }
   }
 
@@ -58,11 +60,12 @@ export default function Devices() {
     try {
       await deleteDevice(id)
       message.success('Device removed')
-      load()
+      void load()
     } catch (err: any) {
-      if (err?.status === 401) { await logout(); navigate('/login'); return }
-      if (err?.status === 403) message.error('Forbidden: admin only')
-      else if (err?.status === 404) message.error('Device not found')
+      const status = err?.response?.status ?? err?.status
+      if (status === 401) { await logout(); navigate('/login'); return }
+      if (status === 403) message.error('Forbidden: admin only')
+      else if (status === 404) message.error('Device not found')
       else message.error('Failed to delete device')
     }
   }
@@ -70,7 +73,7 @@ export default function Devices() {
   const columns: ColumnsType<DeviceRecord> = [
     { title: 'Device ID', dataIndex: 'deviceId', key: 'deviceId' },
     { title: 'Lab', dataIndex: 'lab', key: 'lab' },
-    { title: 'IP', dataIndex: 'ip', key: 'ip', render: (v) => v ?? '—' },
+    { title: 'IP', dataIndex: 'ipAddress', key: 'ipAddress', render: (v) => v ?? '—' },
     { title: 'Port', dataIndex: 'port', key: 'port', render: (v) => v ?? '—' },
     {
       title: 'Actions',
@@ -78,7 +81,7 @@ export default function Devices() {
       render: (_, record) => (
         <Space>
           {isAdmin ? (
-            <Popconfirm title="Delete device?" onConfirm={() => handleDelete(record.id)}>
+            <Popconfirm title="Delete device?" onConfirm={() => handleDelete(record.deviceId)}>
               <Button danger type="text">Delete</Button>
             </Popconfirm>
           ) : null}
@@ -100,20 +103,22 @@ export default function Devices() {
     >
       <Table rowKey="id" columns={columns} dataSource={data} loading={loading} pagination={{ pageSize: 8 }} />
 
-      <Table
-        rowKey="id"
-        dataSource={devices}
-        columns={columns}
-        loading={loading}
-        pagination={false}
-      />
-
-      <Modal
-        title="Add Device"
-        open={isModalOpen}
-        onCancel={() => setIsModalOpen(false)}
-        onOk={handleCreate}
-        okText="Create"
+      <Modal 
+        title="Add Device" 
+        open={open} 
+        footer={
+          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
+            <Button key="cancel" onClick={() => { setOpen(false); form.resetFields() }} style={{ minWidth: 88 }}>
+              Cancel
+            </Button>
+            <Button key="submit" type="primary" onClick={onCreate} style={{ minWidth: 88 }}>
+              Add
+            </Button>
+          </div>
+        }
+        onCancel={() => { setOpen(false); form.resetFields() }}
+        centered
+        width={400}
       >
         <Form layout="vertical" form={form}>
           <Form.Item
@@ -148,7 +153,7 @@ export default function Devices() {
             />
           </Form.Item>
 
-          <Form.Item label="IP Address" name="ip" rules={[
+          <Form.Item label="IP Address" name="ipAddress" rules={[
             { required: true, message: 'IP address is required' },
             { pattern: /^(\d{1,3}\.){3}\d{1,3}$/, message: 'Enter valid IP' }
           ]}>

@@ -6,6 +6,8 @@ import {
   ExperimentOutlined,
   SettingOutlined,
   LoginOutlined,
+  MenuFoldOutlined,
+  MenuUnfoldOutlined,
 } from '@ant-design/icons'
 import Home from './pages/Home'
 import Bookings from './pages/Bookings'
@@ -18,12 +20,28 @@ import Unauthorized from './pages/Unauthorized'
 import { useAuth } from './context/AuthContext'
 import RequireAuth from './routes/RequireAuth'
 import RequireRole from './routes/RequireRole'
+import { useEffect, useState } from 'react'
 
 const { Header, Sider, Content } = Layout
 
 export default function App() {
   const { user, logout } = useAuth()
   const location = useLocation()
+  const [collapsed, setCollapsed] = useState<boolean>(() => {
+    try {
+      const raw = localStorage.getItem('sidebarCollapsed');
+      return raw ? JSON.parse(raw) : false;
+    } catch {
+      return false;
+    }
+  });
+
+  // persist
+  useEffect(() => {
+    try {
+      localStorage.setItem('sidebarCollapsed', JSON.stringify(collapsed));
+    } catch {}
+  }, [collapsed]);
 
   // Highlight menu for nested routes too (e.g., /bookings/:id)
   const pathname = location.pathname
@@ -53,13 +71,26 @@ export default function App() {
   return (
     <Layout style={{ minHeight: '100vh' }}>
       {!isAuthPage && (
-        <Sider>
-          <div style={{ color: 'white', padding: 16, fontWeight: 600 }}>BioScope BAM</div>
+        <Sider
+          collapsible
+          collapsed={collapsed}
+          onCollapse={(val) => setCollapsed(val)}
+          width={200}
+          collapsedWidth={48}
+          style={{ position: 'relative' }}
+        >
+          <div style={{ color: 'white', padding: 16, fontWeight: 600 }}>
+            {!collapsed ? 'BioScope BAM' : 'BS'}
+          </div>
+
           <Menu theme="dark" mode="inline" items={menuItems} selectedKeys={[selectedKey]} />
+
+          {/* collapse/expand is handled by the Sider and the bottom button; removed sticky tab */}
         </Sider>
       )}
 
       <Layout>
+        {/* header */}
         {!isAuthPage && (
           <Header
             style={{
@@ -70,14 +101,20 @@ export default function App() {
               padding: '0 24px'
             }}
           >
+            {/* left */}
             <div style={{ fontWeight: 600 }}>
               {user ? `Welcome, ${user.name} (${user.role})` : 'Not logged in'}
             </div>
-            {user && <Button onClick={logout} danger>Logout</Button>}
+            <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+              {user && (
+                <Button onClick={logout} danger style={{ flex: '0 0 auto' }}>
+                  Logout
+                </Button>
+              )}
+            </div>
           </Header>
         )}
-
-        <Content style={{ margin: isAuthPage ? 0 : 24 }}>
+        <Content style={{ margin: isAuthPage ? 0 : (collapsed ? '24px 24px 24px 68px' : 24) }}>
           <Routes>
             {/* default root -> home if logged in, otherwise login */}
             <Route path="/" element={<Navigate to={user ? "/home" : "/login"} replace />} />

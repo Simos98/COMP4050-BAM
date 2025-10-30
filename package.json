@@ -7,7 +7,8 @@
     "dev": "npm run dev:check || npm run dev:setup",
     "dev:check": "npm run deps:check && npm run db:check && npm run backend:dev",
     "dev:setup": "npm run setup && npm run backend:dev",
-    "dev:full": "npm run dev:check || npm run dev:setup:full",
+    "dev:full": "npm run dev:check:full || npm run dev:setup:full",
+    "dev:check:full": "npm run deps:check && npm run db:check && concurrently \"npm run backend:dev\" \"npm run frontend:dev\"",
     "dev:setup:full": "npm run setup && concurrently \"npm run backend:dev\" \"npm run frontend:dev\"",
     
     "setup": "npm run deps:install && npm run db:start && npm run backend:db:setup",
@@ -16,13 +17,13 @@
     "deps:check": "node scripts/check-deps.js",
     "deps:install": "npm run backend:install && npm run frontend:install",
     
-    "db:check": "docker-compose ps postgres | grep -q healthy",
+    "db:check": "docker-compose ps postgres | findstr healthy > nul 2>&1",
     "db:start": "docker-compose up -d postgres && npm run db:wait",
     "db:wait": "node scripts/wait-for-db.js",
     
     "backend:install": "cd backend && npm install",
     "backend:dev": "cd backend && npm run dev",
-    "backend:db:setup": "cd backend && npm run db:generate && npm run db:push",
+    "backend:db:setup": "cd backend && npm run db:generate && npm run db:push && npm run db:seed",
     
     "frontend:install": "cd frontend && npm install",
     "frontend:dev": "cd frontend && npm run dev",

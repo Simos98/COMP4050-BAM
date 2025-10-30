@@ -1,104 +1,101 @@
-import { Request, Response } from 'express';
-import { sendSuccess, sendError } from '@utils/apiResponses';
-import { bookingService } from '@services/bookingService';
-import { AuthRequest } from '@middleware/authMiddleware';
+import { Request, Response } from 'express'
+import { bookingService } from '../services/bookingService'
+import { sendSuccess, sendError } from '../utils/apiResponses'
 
-//GET /api/bookings - Get all bookings
-export const getAllBookings = async (req: Request, res: Response): Promise<void> => {
+export const getAllBookings = async (req: Request, res: Response) => {
   try {
-    const { userId, deviceId } = req.query;
-    
-    const bookings = await bookingService.getAllBookings({
-      userId: userId as string,
-      deviceId: deviceId as string
-    });
-
-    sendSuccess(res, { items: bookings, total: bookings.length }, 'Bookings retrieved');
-  } catch (error) {
-    console.error('Get bookings error:', error);
-    sendError(res, 'Failed to retrieve bookings', 500);
+    const user = (req as any).user
+    let bookings
+    if (user && (user.role ?? '').toString().toUpperCase() === 'ADMIN') {
+      bookings = await bookingService.findAll()
+    } else if (user) {
+      // use user.id (userId) to fetch bookings
+      bookings = await bookingService.findByUserId(user.id)
+    } else {
+      return sendError(res, 'Not authenticated', 401)
+    }
+    sendSuccess(res, { bookings })
+  } catch (err) {
+    console.error('getAllBookings error', err)
+    sendError(res, 'Could not fetch bookings', 500)
   }
-};
+}
 
-//GET /api/bookings/:id - Get a single booking
-export const getBooking = async (req: Request, res: Response): Promise<void> => {
+export const createBooking = async (req: Request, res: Response) => {
   try {
-    const { id } = req.params;
-    const booking = await bookingService.getBookingById(id);
+    const authUser = (req as any).user
+    // accept { userId } OR { userEmail } OR { user } (email string)
+    const { userId, user: userField, userEmail, deviceId, start, end, notes, status } = req.body
+    const ownerEmail = (userEmail ?? userField) ? String(userEmail ?? userField).toLowerCase() : undefined
+    const ownerId = userId ?? authUser?.id
 
-    if (!booking) {
-      sendError(res, 'Booking not found', 404);
-      return;
+    if (!ownerId && !ownerEmail) {
+      return sendError(res, 'userId (or authenticated session) or userEmail is required', 400)
+    }
+    if (!deviceId || !start || !end) {
+      return sendError(res, 'deviceId, start and end are required', 400)
     }
 
-    sendSuccess(res, { booking }, 'Booking retrieved');
-  } catch (error) {
-    console.error('Get booking error:', error);
-    sendError(res, 'Failed to retrieve booking', 500);
-  }
-};
-
-//POST /api/bookings - Create a new booking
-export const createBooking = async (req: Request, res: Response): Promise<void> => {
-  try {
-    const { userId, deviceId, start, end, notes } = req.body;
-
-    if (!userId || !deviceId || !start || !end) {
-      sendError(res, 'Missing required fields', 400);
-      return;
+    // Validate start/end are valid dates and not in the past
+    const startDate = new Date(start)
+    const endDate = new Date(end)
+    const now = new Date()
+    if (isNaN(startDate.getTime()) || isNaN(endDate.getTime())) {
+      return sendError(res, 'Invalid start or end date', 400)
+    }
+    if (startDate <= now) {
+      return sendError(res, 'Start time must be in the future', 400)
+    }
+    if (endDate <= now) {
+      return sendError(res, 'End time must be in the future', 400)
+    }
+    if (startDate >= endDate) {
+      return sendError(res, 'Start must be before end', 400)
     }
 
-    const booking = await bookingService.createBooking({
-      userId,
+    const created = await bookingService.create({
+      userId: ownerId,
+      userEmail: ownerEmail,
       deviceId,
-      start: new Date(start),
-      end: new Date(end),
-      notes
-    });
+      start,
+      end,
+      notes,
+    })
 
-    sendSuccess(res, { booking }, 'Booking created', 201);
-  } catch (error) {
-    console.error('Create booking error:', error);
-    sendError(res, 'Failed to create booking', 500);
-  }
-};
-
-//PATCH /api/bookings/:id - Update a booking
-export const updateBooking = async (req: Request, res: Response): Promise<void> => {
-  try {
-    const { id } = req.params;
-    const { start, end, notes } = req.body;
-
-    const booking = await bookingService.updateBooking(id, {
-      ...(start && { start: new Date(start) }),
-      ...(end && { end: new Date(end) }),
-      ...(notes !== undefined && { notes })
-    });
-
-    sendSuccess(res, { booking }, 'Booking updated');
-  } catch (error: any) {
-    console.error('Update booking error:', error);
-    if (error.code === 'P2025') {
-      sendError(res, 'Booking not found', 404);
-    } else {
-      sendError(res, 'Failed to update booking', 500);
+    sendSuccess(res, { booking: created }, 'Booking created')
+  } catch (err: any) {
+    console.error('createBooking error', err)
+    // surface conflict as 409
+    if (err?.status === 409) {
+      return sendError(res, err.message || 'Booking time conflict', 409)
     }
-  }
-};
-
-//DELETE /api/bookings/:id - Delete a booking
-export const deleteBooking = async (req: Request, res: Response): Promise<void> => {
-  try {
-    const { id } = req.params;
-    await bookingService.deleteBooking(id);
-
-    sendSuccess(res, null, 'Booking deleted');
-  } catch (error: any) {
-    console.error('Delete booking error:', error);
-    if (error.code === 'P2025') {
-      sendError(res, 'Booking not found', 404);
-    } else {
-      sendError(res, 'Failed to delete booking', 500);
+    if (err?.status === 400) {
+      return sendError(res, err.message || 'Invalid request', 400)
     }
+    sendError(res, 'Could not create booking', 500)
   }
-};
+}
+
+export const updateBookingStatus = async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params
+    const { status } = req.body
+    if (!status) return sendError(res, 'status required', 400)
+    const updated = await bookingService.updateStatus(id, status)
+    sendSuccess(res, { booking: updated }, 'Booking status updated')
+  } catch (err) {
+    console.error('updateBookingStatus error', err)
+    sendError(res, 'Could not update booking status', 500)
+  }
+}
+
+export const deleteBooking = async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params
+    await bookingService.deleteById(id)
+    res.status(204).send()
+  } catch (err) {
+    console.error('deleteBooking error', err)
+    sendError(res, 'Could not delete booking', 500)
+  }
+}

@@ -12,6 +12,9 @@ export default function Signup() {
   const [confirmPassword, setConfirmPassword] = useState('');
   const [err, setErr] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [studentId, setStudentId] = useState('');
+  const [firstName, setFirstName] = useState('');
+  const [lastName, setLastName] = useState('');
 
   const onSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -25,7 +28,7 @@ export default function Signup() {
     setLoading(true);
     try {
       // First register the user
-      await signup(email, password);
+      await signup({ studentId, email, password, firstName, lastName });
       // Then log them in automatically
       const ok = await login(email, password);
       if (ok) {
@@ -42,8 +45,26 @@ export default function Signup() {
 
   return (
     <AuthLayout title="BioScope Access Management">
-      <h3 style={{ marginBottom: '1rem', textAlign: 'center' }}>Create Account</h3>
+      <h3 style={{ marginBottom: '1rem', textAlign: 'center' }}>New here? Create an account!</h3>
       <form onSubmit={onSubmit}>
+        <input
+          placeholder="Student ID"
+          value={studentId}
+          onChange={(e) => setStudentId(e.target.value)}
+          required
+        />
+        <input
+          placeholder="First name"
+          value={firstName}
+          onChange={(e) => setFirstName(e.target.value)}
+          required
+        />
+        <input
+          placeholder="Last name"
+          value={lastName}
+          onChange={(e) => setLastName(e.target.value)}
+          required
+        />
         <input
           placeholder="Email"
           type="email"

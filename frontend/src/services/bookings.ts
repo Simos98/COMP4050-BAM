@@ -1,62 +1,55 @@
-import dayjs from 'dayjs'
-import { getDevice } from './devices'
-import { apiGet, apiPost, apiPatch, apiDelete, apiFetch } from './api'
-import type { Booking, BookingStatus } from '../types'
+import type { BookingStatus } from '../types'
+import { apiFetch } from './api'
 
-export async function listBookings(params?: Record<string, any>): Promise<{ items: Booking[]; page?: number; page_size?: number; total?: number }> {
-  const body = await apiGet('/api/bookings', params)
-  return { items: body.items ?? body, page: body.page, page_size: body.page_size, total: body.total }
+export type Booking = {
+  id: string
+  user: string
+  deviceId: string
+  start: string
+  end: string
+  status: BookingStatus
+  notes?: string | null
+  createdAt?: string
+  updatedAt?: string
 }
 
-export async function getBooking(id: string): Promise<Booking> {
-  const body = await apiGet(`/api/bookings/${encodeURIComponent(id)}`)
-  return body.booking ?? body
+export type BookingCreatePayload = {
+  user: string
+  deviceId: string
+  start: string
+  end: string
+  notes?: string
 }
 
-export async function createBooking(input: { user?: string; deviceId: string; start: string; end: string; notes?: string }) {
-  // backend will enforce RBAC
-  const body = await apiPost('/api/bookings', {
-    user: input.user,
-    device_id: input.deviceId,
-    start: input.start,
-    end: input.end,
-    notes: input.notes
+export async function listBookings(): Promise<Booking[] | any> {
+  const body = await apiFetch('/api/bookings', { method: 'GET' })
+  // Accept multiple possible envelopes
+  return body?.data?.bookings ?? body?.bookings ?? (Array.isArray(body) ? body : body?.data ?? [])
+}
+
+export async function createBooking(payload: BookingCreatePayload) {
+  const body = await apiFetch('/api/bookings', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
   })
-  return body.booking ?? body
+  return body?.data?.booking ?? body?.booking ?? body
 }
 
-export async function updateBookingStatus(id: string, status: BookingStatus) {
-  // use PATCH /api/bookings/:id with { status }
-  const body = await apiPatch(`/api/bookings/${encodeURIComponent(id)}`, { status })
-  return body.booking ?? body
+export async function updateBookingStatus(id: string, status: string) {
+  const body = await apiFetch(`/api/bookings/${encodeURIComponent(id)}/status`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ status })
+  })
+  return body?.data?.booking
 }
 
 export async function deleteBooking(id: string) {
-  return apiDelete(`/api/bookings/${encodeURIComponent(id)}`)
+  await apiFetch(`/api/bookings/${id}`, { method: 'DELETE' })
 }
 
-export async function listBookingImages(bookingId: string) {
-  const body = await apiGet(`/api/bookings/${encodeURIComponent(bookingId)}/images`)
-  return body.items ?? body
+export async function getBooking(id: string): Promise<Booking | any> {
+  const body = await apiFetch(`/api/bookings/${id}`, { method: 'GET' })
+  return body?.data?.booking ?? body?.booking ?? body
 }
-
-export async function getMyBookings(): Promise<Booking[]> {
-  // backend should return bookings for the logged-in user
-  return apiFetch('/api/bookings');
-}
-
-// const KEY = 'bookings_v1'
-
-// // Seed demo data
-// function seedIfEmpty() {
-//   const raw = localStorage.getItem(KEY)
-//   if (raw) return
-//   const now = dayjs()
-//   const demo: Booking[] = [
-//     {
-//       id: crypto.randomUUID(),
-//       user: 'student01@school.edu',
-//       deviceId: 'B-001',
-//       start: now.add(1, 'hour').toISOString(),
-//       end: now.add(2, 'hour').toISOString(),
-//       status: 'pending',
