@@ -3,7 +3,7 @@ import { getHealth, getRoot } from '@controllers/healthController';
 
 const router = Router();
 
-// Define routes and connect them to controllers
+// GET / - Root endpoint
 router.get('/', getRoot);
 router.get('/health', getHealth);
 
