@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Card, Table, Button, Modal, Form, Input, message, Popconfirm, Space, ConfigProvider } from 'antd'
+import { Card, Table, Button, Modal, Form, Input, message, Popconfirm, Space } from 'antd'
 import type { ColumnsType } from 'antd/es/table'
 import { listDevices, createDevice, deleteDevice, type DeviceRecord } from '../services/devices'
 import { useAuth } from '../context/AuthContext'
@@ -11,6 +11,7 @@ export default function Devices() {
 
   // normalize role to match backend ("ADMIN")
   const isAdmin = (user?.role ?? '').toString().toUpperCase() === 'ADMIN'
+
   const [data, setData] = useState<DeviceRecord[]>([])
   const [loading, setLoading] = useState(false)
   const [open, setOpen] = useState(false)
@@ -100,23 +101,7 @@ export default function Devices() {
     >
       <Table rowKey="id" columns={columns} dataSource={data} loading={loading} pagination={{ pageSize: 8 }} />
 
-      <Modal 
-        title="Add Device" 
-        open={open} 
-        footer={
-          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
-            <Button key="cancel" onClick={() => { setOpen(false); form.resetFields() }} style={{ minWidth: 88 }}>
-              Cancel
-            </Button>
-            <Button key="submit" type="primary" onClick={onCreate} style={{ minWidth: 88 }}>
-              Add
-            </Button>
-          </div>
-        }
-        onCancel={() => { setOpen(false); form.resetFields() }}
-        centered
-        width={400}
-      >
+      <Modal title="Add Device" open={open} onOk={onCreate} onCancel={() => { setOpen(false); form.resetFields() }} okText="Add">
         <Form layout="vertical" form={form}>
           <Form.Item label="Device ID" name="deviceId" rules={[{ required: true, message: 'Enter device id' }]}>
             <Input placeholder="e.g. B-001" />
