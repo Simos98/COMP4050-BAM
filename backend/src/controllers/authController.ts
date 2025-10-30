@@ -5,19 +5,11 @@ import { PrismaClient } from '@prisma/client';
 import { AuthRequest } from '@middleware/authMiddleware';
 const prisma = new PrismaClient();
 
-// Simple in-memory rate limiting (for production, use Redis)
 const loginAttempts = new Map<string, { count: number; resetAt: number }>();
 const MAX_ATTEMPTS = 5;
 const LOCKOUT_DURATION = 15 * 60 * 1000; // 15 minutes
 
-// ========================================
-// Auth Controller - Authentication handlers
-// ========================================
-
-/**
- * POST /api/auth/login
- * Authenticate user and return token
- */
+//POST /api/auth/login - Authenticate user and return token
 export const login = async (req: Request, res: Response): Promise<void> => {
   try {
     const { email, password } = req.body;
@@ -27,7 +19,6 @@ export const login = async (req: Request, res: Response): Promise<void> => {
       return;
     }
 
-    // Check rate limiting
     const clientKey = email.toLowerCase();
     const attempts = loginAttempts.get(clientKey);
     
@@ -42,16 +33,13 @@ export const login = async (req: Request, res: Response): Promise<void> => {
           return;
         }
       } else {
-        // Reset if lockout period has passed
         loginAttempts.delete(clientKey);
       }
     }
 
-    // Attempt login
     const result = await authService.login(email, password);
 
     if (!result) {
-      // Increment failed attempts
       const current = loginAttempts.get(clientKey);
       if (current && Date.now() < current.resetAt) {
         current.count += 1;
@@ -66,20 +54,17 @@ export const login = async (req: Request, res: Response): Promise<void> => {
       return;
     }
 
-    // Success - clear failed attempts
     loginAttempts.delete(email.toLowerCase());
 
-    // set token as secure, httpOnly cookie
     const token = result.token;
     const cookieOptions = {
       httpOnly: true,
-      secure: process.env.NODE_ENV === 'production', // must be false in dev (HTTP)
-      sameSite: 'lax' as const, // 'lax' works for most cases; use 'none' + Secure for cross-site HTTPS
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'lax' as const,
       maxAge: 7 * 24 * 60 * 60 * 1000
     };
     res.cookie('token', token, cookieOptions);
 
-    // respond with user only (omit token so client JS doesn't store it)
     const response = {
       user: {
         id: result.user.id,
@@ -96,21 +81,16 @@ export const login = async (req: Request, res: Response): Promise<void> => {
   }
 };
 
-/**
- * POST /api/auth/register
- * Register new user (optional)
- */
+//POST /api/auth/register - Register new user
 export const register = async (req: Request, res: Response): Promise<void> => {
   try {
     const { studentId, email, password, firstName, lastName } = req.body;
 
-    // Validate payload
     if (!studentId || !email || !password || !firstName || !lastName) {
       sendError(res, 'All fields are required', 400);
       return;
     }
 
-    // Register user
     const result = await authService.register({
       studentId,
       email,
@@ -133,7 +113,6 @@ export const register = async (req: Request, res: Response): Promise<void> => {
   } catch (error: any) {
     console.error('Registration error:', error);
 
-    // Handle unique constraint violations
     if (error.code === 'P2002') {
       sendError(res, 'User with this email or student ID already exists', 400);
     } else {
@@ -142,13 +121,9 @@ export const register = async (req: Request, res: Response): Promise<void> => {
   }
 };
 
-/**
- * GET /api/auth/me
- * Get current user from token (requires auth middleware)
- */
+//GET /api/auth/me - Get current user from token
 export const getCurrentUser = async (req: Request, res: Response): Promise<void> => {
   try {
-    // This would be set by auth middleware
     const userId = (req as any).user?.id;
 
     if (!userId) {
@@ -156,7 +131,6 @@ export const getCurrentUser = async (req: Request, res: Response): Promise<void>
       return;
     }
 
-    // Fetch user from database
     const user = await prisma.user.findUnique({
       where: { id: userId },
       select: {
@@ -190,12 +164,8 @@ export const getCurrentUser = async (req: Request, res: Response): Promise<void>
   }
 };
 
-/**
- * POST /api/auth/logout
- * End the session (client-side token deletion)
- */
+//POST /api/auth/logout - End the session
 export const logout = async (req: Request, res: Response): Promise<void> => {
-  // clear token cookie
   res.clearCookie('token', {
     httpOnly: true,
     secure: process.env.NODE_ENV === 'production',

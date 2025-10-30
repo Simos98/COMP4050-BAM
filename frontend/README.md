@@ -28,3 +28,5 @@
 ## Login
 right now, login accepts any form of email and password. To test admin privileges and protected routes, 
 simply add admin to any part of the email.
+
+To test the backend without mock data, change VITE_USE_MOCKS to false in .env

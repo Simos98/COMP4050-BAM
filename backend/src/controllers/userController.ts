@@ -2,13 +2,7 @@ import { Request, Response } from 'express';
 import { sendSuccess, sendError } from '@utils/apiResponses';
 import { userService } from '@services/userService';
 
-// ========================================
-// User Controller - HTTP request handlers
-// ========================================
-
-/**
- * GET /api/users - Get all users
- */
+//GET /api/users - Get all users
 export const getAllUsers = async (req: Request, res: Response): Promise<void> => {
   try {
     const users = await userService.findAll();
@@ -19,9 +13,7 @@ export const getAllUsers = async (req: Request, res: Response): Promise<void> =>
   }
 };
 
-/**
- * GET /api/users/:id - Get user by ID
- */
+//GET /api/users/:id - Get user by ID
 export const getUserById = async (req: Request, res: Response): Promise<void> => {
   try {
     const { id } = req.params;
@@ -39,31 +31,26 @@ export const getUserById = async (req: Request, res: Response): Promise<void> =>
   }
 };
 
-/**
- * POST /api/users - Create new user
- */
+//POST /api/users - Create new user
 export const createUser = async (req: Request, res: Response): Promise<void> => {
   try {
     const { studentId, email, password, firstName, lastName, role } = req.body;
     
-    // Validation
     if (!studentId || !email || !password || !firstName || !lastName) {
       sendError(res, 'Missing required fields', 400);
       return;
     }
     
-    // Check if user already exists
     const existingUser = await userService.findByEmail(email);
     if (existingUser) {
       sendError(res, 'User with this email already exists', 400);
       return;
     }
     
-    // Create user
     const newUser = await userService.create({
       studentId,
       email,
-      password, // TODO: Hash password before creating!
+      password,
       firstName,
       lastName,
       role
@@ -73,7 +60,6 @@ export const createUser = async (req: Request, res: Response): Promise<void> => 
   } catch (error: any) {
     console.error('Error creating user:', error);
     
-    // Handle Prisma unique constraint violations
     if (error.code === 'P2002') {
       sendError(res, 'User with this email or student ID already exists', 400);
     } else {
@@ -82,9 +68,7 @@ export const createUser = async (req: Request, res: Response): Promise<void> => 
   }
 };
 
-/**
- * PUT /api/users/:id - Update user
- */
+//PUT /api/users/:id - Update user
 export const updateUser = async (req: Request, res: Response): Promise<void> => {
   try {
     const { id } = req.params;
@@ -108,9 +92,7 @@ export const updateUser = async (req: Request, res: Response): Promise<void> => 
   }
 };
 
-/**
- * DELETE /api/users/:id - Delete user
- */
+//DELETE /api/users/:id - Delete user
 export const deleteUser = async (req: Request, res: Response): Promise<void> => {
   try {
     const { id } = req.params;
@@ -127,9 +109,7 @@ export const deleteUser = async (req: Request, res: Response): Promise<void> => 
   }
 };
 
-/**
- * GET /api/users/search?q=query - Search users
- */
+//GET /api/users/search?q=query - Search users
 export const searchUsers = async (req: Request, res: Response): Promise<void> => {
   try {
     const query = req.query.q as string;

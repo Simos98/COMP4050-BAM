@@ -38,6 +38,8 @@ export async function getDevice(id: string): Promise<DeviceRecord | null> {
   } catch {
     return null
   }
+  mockDevices.push(newDevice)
+  return newDevice
 }
 
 export async function createDevice(payload: DeviceCreatePayload) {

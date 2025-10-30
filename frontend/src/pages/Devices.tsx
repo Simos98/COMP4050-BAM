@@ -1,3 +1,4 @@
+// src/pages/Devices.tsx
 import { useEffect, useState } from 'react'
 import { Card, Table, Button, Modal, Form, Input, message, Popconfirm, Space, ConfigProvider } from 'antd'
 import type { ColumnsType } from 'antd/es/table'
@@ -13,10 +14,11 @@ export default function Devices() {
   const isAdmin = (user?.role ?? '').toString().toUpperCase() === 'ADMIN'
   const [data, setData] = useState<DeviceRecord[]>([])
   const [loading, setLoading] = useState(false)
-  const [open, setOpen] = useState(false)
+  const [isModalOpen, setIsModalOpen] = useState(false)
   const [form] = Form.useForm()
 
-  const load = async () => {
+  // Load devices on mount
+  const loadDevices = async () => {
     setLoading(true)
     try {
       const rows = await listDevices()
@@ -32,7 +34,8 @@ export default function Devices() {
 
   useEffect(() => { void load() }, [])
 
-  const onCreate = async () => {
+  // Handle new device creation
+  const handleCreate = async () => {
     try {
       const values = await form.validateFields()
       await createDevice({
@@ -118,12 +121,36 @@ export default function Devices() {
         width={400}
       >
         <Form layout="vertical" form={form}>
-          <Form.Item label="Device ID" name="deviceId" rules={[{ required: true, message: 'Enter device id' }]}>
-            <Input placeholder="e.g. B-001" />
+          <Form.Item
+            label="Model"
+            name="model"
+            rules={[{ required: true, message: 'Please enter the device model' }]}
+          >
+            <Input placeholder="Bioscope Mk4" />
           </Form.Item>
 
-          <Form.Item label="Lab" name="lab" rules={[{ required: true, message: 'Enter lab name or number' }]}>
-            <Input placeholder="e.g. Lab 1" />
+          <Form.Item
+            label="Location"
+            name="location"
+            rules={[{ required: true, message: 'Please enter the device location' }]}
+          >
+            <Input placeholder="Lab 4" />
+          </Form.Item>
+
+          <Form.Item
+            label="Status"
+            name="status"
+            initialValue="online"
+            rules={[{ required: true }]}
+          >
+            <Select
+              options={[
+                { value: 'online', label: 'Online' },
+                { value: 'offline', label: 'Offline' },
+                { value: 'busy', label: 'Busy' },
+                { value: 'maintenance', label: 'Maintenance' },
+              ]}
+            />
           </Form.Item>
 
           <Form.Item label="IP Address" name="ipAddress" rules={[
@@ -141,6 +168,6 @@ export default function Devices() {
           </Form.Item>
         </Form>
       </Modal>
-    </Card>
+    </div>
   )
 }

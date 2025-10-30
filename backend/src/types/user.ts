@@ -1,14 +1,10 @@
-import { User } from '../generated/prisma';
+import { User } from '@prisma/client';
 
-/**
- * User type without password field - safe for API responses
- */
+// User type without password field - safe for API responses
 export type UserWithoutPassword = Omit<User, 'password'>;
 
-/**
- * Prisma select object to exclude password from queries
- * Reusable across all user service methods
- */
+// Prisma select object to exclude password from queries
+// Reusable across all user service methods
 export const userSelectWithoutPassword = {
   id: true,
   studentId: true,

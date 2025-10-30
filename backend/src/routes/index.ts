@@ -7,13 +7,10 @@ import bookingRoutes from './bookingRoutes';
 
 const router = Router();
 
-// Mount different route groups
+// Health routes
 router.use('/', healthRoutes);
 
-// Future routes will go here:
-// router.use('/api/users', userRoutes);
-// router.use('/api/auth', authRoutes);
-
+// API routes
 router.use('/', healthRoutes);
 router.use('/api/users', userRoutes);
 router.use('/api/devices', deviceRoutes);
