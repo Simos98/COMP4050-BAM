@@ -4,10 +4,10 @@ import bcrypt from 'bcryptjs';
 const prisma = new PrismaClient();
 
 async function seed() {
-  console.log('🌱 Starting database seeding...');
+  console.log('Starting database seeding...');
 
   const saltRounds = 10;
-  const adminPlain = 'adminpass123'; // choose test password
+  const adminPlain = 'adminpass123'; // Test Password
   const teacherPlain = 'teacherpass123';
   const studentPlain = 'studentpass123';
 
@@ -16,10 +16,10 @@ async function seed() {
   const studentHash = await bcrypt.hash(studentPlain, saltRounds);
 
   try {
-    // 1. Create default admin user (if doesn't exist)
+    // Default Admin user
     const admin = await prisma.user.upsert({
       where: { email: 'admin@comp4050.edu' },
-      update: { password: adminHash }, // Don't update if exists
+      update: { password: adminHash },
       create: {
         studentId: '00000000',
         email: 'admin@comp4050.edu',
@@ -31,7 +31,7 @@ async function seed() {
     });
     console.log('✅ Admin user ready:', admin.email);
 
-    // 2. Create sample teacher (for development)
+    // Sample teacher (for development)
     const teacher = await prisma.user.upsert({
       where: { email: 'teacher@comp4050.edu' },
       update: {},
@@ -46,7 +46,7 @@ async function seed() {
     });
     console.log('✅ Sample teacher ready:', teacher.email);
 
-    // 3. Create sample students (for development)
+    // Sample Students (for development)
     const students = await Promise.all([
       prisma.user.upsert({
         where: { email: 'student1@comp4050.edu' },
@@ -75,7 +75,6 @@ async function seed() {
     ]);
     console.log('✅ Sample students ready:', students.length);
 
-    // 4. Summary
     const totalUsers = await prisma.user.count();
     console.log(`🌱 Seeding completed! Total users: ${totalUsers}`);
 
