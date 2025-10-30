@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { Button, Card, DatePicker, Form, Input, Modal, Select, Space, Table, Tag, message, Popconfirm, Alert } from 'antd'
+import { Button, Card, DatePicker, Form, Input, Modal, Select, Space, Table, Tag, message, Popconfirm, Alert, ConfigProvider } from 'antd'
 import type { ColumnsType } from 'antd/es/table'
 import dayjs, { Dayjs } from 'dayjs'
 import type { Booking } from '../services/bookings'
@@ -366,7 +366,23 @@ export default function Bookings() {
         }
       })} rowClassName={() => 'clickable-row'} />
 
-      <Modal title="Create Booking" open={open} onOk={onCreate} onCancel={() => { setOpen(false); form.resetFields() }} okText="Create">
+      <Modal 
+        title="Create Booking" 
+        open={open} 
+        footer={
+          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
+            <Button key="cancel" onClick={() => { setOpen(false); form.resetFields() }} style={{ minWidth: 88 }}>
+              Cancel
+            </Button>
+            <Button key="submit" type="primary" onClick={onCreate} style={{ minWidth: 88 }}>
+              Create
+            </Button>
+          </div>
+        }
+        onCancel={() => { setOpen(false); form.resetFields() }}
+        centered
+        width={400}
+      >
         {devices.length === 0 && <Alert message="No devices available to book" type="warning" showIcon style={{ marginBottom: 12 }} />}
         <Form layout="vertical" form={form} initialValues={{ user: user?.email || '' }}>
           <Form.Item label="User Email" name="user" rules={[{ required: true, message: 'Select or enter a user' }, { type: 'email', message: 'Enter a valid email' }]}>
