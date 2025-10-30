@@ -1,145 +1,62 @@
-// src/services/bookings.ts
-import { api } from './api'
-import type { Booking } from '../types'
-import { useMocks } from './useMocks'
+import dayjs from 'dayjs'
+import { getDevice } from './devices'
+import { apiGet, apiPost, apiPatch, apiDelete, apiFetch } from './api'
+import type { Booking, BookingStatus } from '../types'
 
-// ------------------
-// Mock implementations
-// ------------------
-
-function mockListBookings(): Booking[] {
-  const raw = localStorage.getItem('bookings_v1')
-  if (!raw) return []
-  return JSON.parse(raw)
+export async function listBookings(params?: Record<string, any>): Promise<{ items: Booking[]; page?: number; page_size?: number; total?: number }> {
+  const body = await apiGet('/api/bookings', params)
+  return { items: body.items ?? body, page: body.page, page_size: body.page_size, total: body.total }
 }
 
-function mockCreateBooking(payload: {
-  user: string
-  deviceId: string
-  start: string
-  end: string
-  notes?: string
-}): Booking {
-  const all = mockListBookings()
-  const newBooking: Booking = {
-    id: crypto.randomUUID(),
-    user: payload.user,
-    deviceId: payload.deviceId,
-    start: payload.start,
-    end: payload.end,
-    status: 'pending',
-    notes: payload.notes,
-  }
-  all.push(newBooking)
-  localStorage.setItem('bookings_v1', JSON.stringify(all))
-  return newBooking
+export async function getBooking(id: string): Promise<Booking> {
+  const body = await apiGet(`/api/bookings/${encodeURIComponent(id)}`)
+  return body.booking ?? body
 }
 
-function mockUpdateBookingStatus(id: string, status: string): Booking | undefined {
-  const all = mockListBookings()
-  const idx = all.findIndex((b) => b.id === id)
-  if (idx >= 0) {
-    all[idx].status = status as any
-    localStorage.setItem('bookings_v1', JSON.stringify(all))
-    return all[idx]
-  }
-  return undefined
+export async function createBooking(input: { user?: string; deviceId: string; start: string; end: string; notes?: string }) {
+  // backend will enforce RBAC
+  const body = await apiPost('/api/bookings', {
+    user: input.user,
+    device_id: input.deviceId,
+    start: input.start,
+    end: input.end,
+    notes: input.notes
+  })
+  return body.booking ?? body
 }
 
-function mockDeleteBooking(id: string) {
-  const all = mockListBookings().filter((b) => b.id !== id)
-  localStorage.setItem('bookings_v1', JSON.stringify(all))
+export async function updateBookingStatus(id: string, status: BookingStatus) {
+  // use PATCH /api/bookings/:id with { status }
+  const body = await apiPatch(`/api/bookings/${encodeURIComponent(id)}`, { status })
+  return body.booking ?? body
 }
 
-// ------------------
-// Live API implementations
-// ------------------
-
-async function apiListBookings(): Promise<Booking[]> {
-  const res = await api.get('/bookings')
-  // Backend should return { data: [...] }
-  return res.data.data ?? res.data
+export async function deleteBooking(id: string) {
+  return apiDelete(`/api/bookings/${encodeURIComponent(id)}`)
 }
 
-async function apiCreateBooking(payload: {
-  user: string
-  deviceId: string
-  start: string
-  end: string
-  notes?: string
-}): Promise<Booking> {
-  const res = await api.post('/bookings', payload)
-  return res.data.data ?? res.data
+export async function listBookingImages(bookingId: string) {
+  const body = await apiGet(`/api/bookings/${encodeURIComponent(bookingId)}/images`)
+  return body.items ?? body
 }
 
-async function apiUpdateBookingStatus(id: string, status: string): Promise<Booking> {
-  const res = await api.patch(`/bookings/${id}`, { status })
-  return res.data.data ?? res.data
+export async function getMyBookings(): Promise<Booking[]> {
+  // backend should return bookings for the logged-in user
+  return apiFetch('/api/bookings');
 }
 
-async function apiDeleteBooking(id: string) {
-  await api.delete(`/bookings/${id}`)
-}
+// const KEY = 'bookings_v1'
 
-// ------------------
-// Toggle export based on mock mode
-// ------------------
-
-export const listBookings = useMocks ? mockListBookings : apiListBookings
-export const createBooking = useMocks ? mockCreateBooking : apiCreateBooking
-export const updateBookingStatus = useMocks ? mockUpdateBookingStatus : apiUpdateBookingStatus
-export const deleteBooking = useMocks ? mockDeleteBooking : apiDeleteBooking
-
-// ------------------
-// Get single booking by ID (mock + API support)
-// ------------------
-
-async function apiGetBooking(id: string): Promise<Booking> {
-  const res = await api.get(`/bookings/${id}`)
-  return res.data.data ?? res.data
-}
-
-function mockGetBooking(id: string): Booking | undefined {
-  const all = mockListBookings()
-  return all.find((b) => b.id === id)
-}
-
-// Toggle export
-export const getBooking = useMocks ? mockGetBooking : apiGetBooking
-
-// For now, mock data structure for images
-type BookingImage = {
-  id: string
-  bookingId: string
-  url: string
-  createdAt: string
-}
-
-const mockBookingImages: BookingImage[] = [
-  {
-    id: 'img-001',
-    bookingId: 'b001',
-    url: 'https://via.placeholder.com/300x200?text=Microscope+Image+1',
-    createdAt: new Date().toISOString(),
-  },
-  {
-    id: 'img-002',
-    bookingId: 'b001',
-    url: 'https://via.placeholder.com/300x200?text=Microscope+Image+2',
-    createdAt: new Date().toISOString(),
-  },
-]
-
-// Mock + API versions
-async function apiListBookingImages(bookingId: string): Promise<BookingImage[]> {
-  const res = await api.get(`/bookings/${bookingId}/images`)
-  return res.data.data ?? res.data
-}
-
-async function mockListBookingImages(bookingId: string): Promise<BookingImage[]> {
-  return mockBookingImages.filter((img) => img.bookingId === bookingId)
-}
-
-// Export toggle
-export const listBookingImages = useMocks ? mockListBookingImages : apiListBookingImages
-
+// // Seed demo data
+// function seedIfEmpty() {
+//   const raw = localStorage.getItem(KEY)
+//   if (raw) return
+//   const now = dayjs()
+//   const demo: Booking[] = [
+//     {
+//       id: crypto.randomUUID(),
+//       user: 'student01@school.edu',
+//       deviceId: 'B-001',
+//       start: now.add(1, 'hour').toISOString(),
+//       end: now.add(2, 'hour').toISOString(),
+//       status: 'pending',

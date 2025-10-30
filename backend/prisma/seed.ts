@@ -1,19 +1,29 @@
 import { PrismaClient } from '../src/generated/prisma';
+import bcrypt from 'bcryptjs';
 
 const prisma = new PrismaClient();
 
 async function seed() {
-  console.log('🌱 Starting database seeding...');
+  console.log('Starting database seeding...');
+
+  const saltRounds = 10;
+  const adminPlain = 'adminpass123'; // Test Password
+  const teacherPlain = 'teacherpass123';
+  const studentPlain = 'studentpass123';
+
+  const adminHash = await bcrypt.hash(adminPlain, saltRounds);
+  const teacherHash = await bcrypt.hash(teacherPlain, saltRounds);
+  const studentHash = await bcrypt.hash(studentPlain, saltRounds);
 
   try {
-    // 1. Create default admin user (if doesn't exist)
+    // Default Admin user
     const admin = await prisma.user.upsert({
       where: { email: 'admin@comp4050.edu' },
-      update: {}, // Don't update if exists
+      update: { password: adminHash },
       create: {
         studentId: '00000000',
         email: 'admin@comp4050.edu',
-        password: 'hashedAdminPassword', // In real app, hash this properly
+        password: adminHash, // Use hashed password
         firstName: 'System',
         lastName: 'Administrator',
         role: 'ADMIN'
@@ -21,14 +31,14 @@ async function seed() {
     });
     console.log('✅ Admin user ready:', admin.email);
 
-    // 2. Create sample teacher (for development)
+    // Sample teacher (for development)
     const teacher = await prisma.user.upsert({
       where: { email: 'teacher@comp4050.edu' },
       update: {},
       create: {
         studentId: '11111111',
         email: 'teacher@comp4050.edu',
-        password: 'hashedTeacherPassword',
+        password: teacherHash, // Use hashed password
         firstName: 'Jane',
         lastName: 'Professor',
         role: 'TEACHER'
@@ -36,7 +46,7 @@ async function seed() {
     });
     console.log('✅ Sample teacher ready:', teacher.email);
 
-    // 3. Create sample students (for development)
+    // Sample Students (for development)
     const students = await Promise.all([
       prisma.user.upsert({
         where: { email: 'student1@comp4050.edu' },
@@ -44,7 +54,7 @@ async function seed() {
         create: {
           studentId: '12345678',
           email: 'student1@comp4050.edu',
-          password: 'hashedStudentPassword',
+          password: studentHash, // Use hashed password
           firstName: 'Alice',
           lastName: 'Johnson',
           role: 'STUDENT'
@@ -56,7 +66,7 @@ async function seed() {
         create: {
           studentId: '87654321',
           email: 'student2@comp4050.edu',
-          password: 'hashedStudentPassword',
+          password: studentHash, // Use hashed password
           firstName: 'Bob',
           lastName: 'Smith',
           role: 'STUDENT'
@@ -65,7 +75,6 @@ async function seed() {
     ]);
     console.log('✅ Sample students ready:', students.length);
 
-    // 4. Summary
     const totalUsers = await prisma.user.count();
     console.log(`🌱 Seeding completed! Total users: ${totalUsers}`);
 

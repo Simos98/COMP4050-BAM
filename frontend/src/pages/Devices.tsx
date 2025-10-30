@@ -1,12 +1,16 @@
 // src/pages/Devices.tsx
 import { useEffect, useState } from 'react'
-import { Table, Button, Modal, Form, Input, Select, message, Tag, Space } from 'antd'
-import { PlusOutlined } from '@ant-design/icons'
-import { listDevices, createDevice, deleteDevice, updateDevice } from '../services/devices'
-import type { Device } from '../services/devices'
+import { Card, Table, Button, Modal, Form, Input, message, Popconfirm, Space } from 'antd'
+import type { ColumnsType } from 'antd/es/table'
+import { listDevices, createDevice, deleteDevice, type DeviceRecord } from '../services/devices'
+import { useAuth } from '../context/AuthContext'
+import { useNavigate } from 'react-router-dom'
 
 export default function Devices() {
-  const [devices, setDevices] = useState<Device[]>([])
+  const { user, logout } = useAuth()
+  const navigate = useNavigate()
+  const isAdmin = user?.role === 'admin'
+  const [data, setData] = useState<DeviceRecord[]>([])
   const [loading, setLoading] = useState(false)
   const [isModalOpen, setIsModalOpen] = useState(false)
   const [form] = Form.useForm()
@@ -15,10 +19,10 @@ export default function Devices() {
   const loadDevices = async () => {
     setLoading(true)
     try {
-      const data = await listDevices()
-      setDevices(data)
-    } catch (err) {
-      console.error(err)
+      const rows = await listDevices()
+      setData(rows)
+    } catch (e: any) {
+      if (e?.status === 401) { await logout(); navigate('/login'); return }
       message.error('Failed to load devices')
     } finally {
       setLoading(false)
@@ -34,90 +38,67 @@ export default function Devices() {
     try {
       const values = await form.validateFields()
       await createDevice({
-        model: values.model,
-        location: values.location,
-        status: values.status,
+        deviceId: values.deviceId.trim(),
+        lab: values.lab.trim(),
+        ip: values.ip.trim(),
+        port: Number(values.port),
       })
-      message.success('Device created successfully!')
+      message.success('Device added')
       form.resetFields()
-      setIsModalOpen(false)
-      loadDevices()
-    } catch (err) {
-      console.error(err)
-      message.error('Failed to create device')
-    }
-  }
-
-  // Optional actions (update / delete)
-  const handleUpdateStatus = async (id: string, status: Device['status']) => {
-    try {
-      await updateDevice(id, { status })
-      message.success(`Device marked as ${status}`)
-      loadDevices()
-    } catch (err) {
-      console.error(err)
-      message.error('Failed to update device status')
+      setOpen(false)
+      load()
+    } catch (err: any) {
+      if (err?.status === 401) { await logout(); navigate('/login'); return }
+      if (err?.status === 403) message.error('Forbidden: admin only')
+      else message.error(err?.message || 'Failed to add device')
     }
   }
 
   const handleDelete = async (id: string) => {
     try {
       await deleteDevice(id)
-      message.success('Device deleted successfully')
-      loadDevices()
-    } catch (err) {
-      console.error(err)
-      message.error('Failed to delete device')
+      message.success('Device removed')
+      load()
+    } catch (err: any) {
+      if (err?.status === 401) { await logout(); navigate('/login'); return }
+      if (err?.status === 403) message.error('Forbidden: admin only')
+      else if (err?.status === 404) message.error('Device not found')
+      else message.error('Failed to delete device')
     }
   }
 
-  // Table columns
-  const columns = [
-    { title: 'ID', dataIndex: 'id', key: 'id' },
-    { title: 'Model', dataIndex: 'model', key: 'model' },
-    { title: 'Location', dataIndex: 'location', key: 'location' },
-    {
-      title: 'Status',
-      dataIndex: 'status',
-      key: 'status',
-      render: (status: Device['status']) => {
-        const colors: Record<Device['status'], string> = {
-          online: 'green',
-          offline: 'volcano',
-          busy: 'gold',
-          maintenance: 'blue',
-        }
-        return <Tag color={colors[status]}>{status.toUpperCase()}</Tag>
-      },
-    },
+  const columns: ColumnsType<DeviceRecord> = [
+    { title: 'Device ID', dataIndex: 'deviceId', key: 'deviceId' },
+    { title: 'Lab', dataIndex: 'lab', key: 'lab' },
+    { title: 'IP', dataIndex: 'ip', key: 'ip', render: (v) => v ?? '—' },
+    { title: 'Port', dataIndex: 'port', key: 'port', render: (v) => v ?? '—' },
     {
       title: 'Actions',
       key: 'actions',
-      render: (_: any, record: Device) => (
+      render: (_, record) => (
         <Space>
-          <Button size="small" onClick={() => handleUpdateStatus(record.id, 'maintenance')}>
-            Maintenance
-          </Button>
-          <Button size="small" danger onClick={() => handleDelete(record.id)}>
-            Delete
-          </Button>
+          {isAdmin ? (
+            <Popconfirm title="Delete device?" onConfirm={() => handleDelete(record.id)}>
+              <Button danger type="text">Delete</Button>
+            </Popconfirm>
+          ) : null}
         </Space>
-      ),
-    },
+      )
+    }
   ]
 
   return (
-    <div style={{ margin: 24 }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 16 }}>
-        <h2>Devices</h2>
-        <Button
-          type="primary"
-          icon={<PlusOutlined />}
-          onClick={() => setIsModalOpen(true)}
-        >
-          Add Device
-        </Button>
-      </div>
+    <Card
+      title="Devices"
+      extra={
+        isAdmin ? (
+          <Button type="primary" onClick={() => setOpen(true)}>
+            Add Device
+          </Button>
+        ) : null
+      }
+    >
+      <Table rowKey="id" columns={columns} dataSource={data} loading={loading} pagination={{ pageSize: 8 }} />
 
       <Table
         rowKey="id"
@@ -165,6 +146,20 @@ export default function Devices() {
                 { value: 'maintenance', label: 'Maintenance' },
               ]}
             />
+          </Form.Item>
+
+          <Form.Item label="IP Address" name="ip" rules={[
+            { required: true, message: 'IP address is required' },
+            { pattern: /^(\d{1,3}\.){3}\d{1,3}$/, message: 'Enter valid IP' }
+          ]}>
+            <Input placeholder="e.g. 192.168.10.101" />
+          </Form.Item>
+
+          <Form.Item label="Port" name="port" rules={[
+            { required: true, message: 'Port is required' },
+            { pattern: /^\d+$/, message: 'Enter valid port' }
+          ]}>
+            <Input placeholder="e.g. 8000" />
           </Form.Item>
         </Form>
       </Modal>
