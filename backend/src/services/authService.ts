@@ -8,29 +8,19 @@ const prisma = new PrismaClient();
 const JWT_SECRET = process.env.JWT_SECRET || 'fallback-secret-key';
 const JWT_EXPIRES_IN = process.env.JWT_EXPIRES_IN || '7d';
 
-// ========================================
-// Auth Service - Authentication operations
-// ========================================
-
 export const authService = {
-  /**
-   * Hash a password using bcrypt
-   */
+  // Hash a password using bcrypt
   async hashPassword(password: string): Promise<string> {
     const salt = await bcrypt.genSalt(10);
     return await bcrypt.hash(password, salt);
   },
 
-  /**
-   * Compare password with hashed password
-   */
+  // Compare password with hashed password
   async comparePassword(password: string, hashedPassword: string): Promise<boolean> {
     return await bcrypt.compare(password, hashedPassword);
   },
 
-  /**
-   * Generate JWT token
-   */
+  // Generate JWT token
   generateToken(user: UserWithoutPassword): string {
     const payload = {
       id: user.id,
@@ -43,9 +33,7 @@ export const authService = {
       } as jwt.SignOptions);
   },
 
-  /**
-   * Verify JWT token
-   */
+  // Verify JWT token
   verifyToken(token: string): any {
     try {
       return jwt.verify(token, JWT_SECRET);
@@ -54,31 +42,25 @@ export const authService = {
     }
   },
 
-  /**
-   * Authenticate user with email and password
-   */
+  // Authenticate user with email and password
   async login(email: string, password: string): Promise<{
     user: UserWithoutPassword;
     token: string;
   } | null> {
-    // Find user by email (with password)
     const user = await prisma.user.findUnique({
       where: { email }
     });
 
-    // User not found
     if (!user) {
       return null;
     }
 
-    // Compare passwords
     const isPasswordValid = await this.comparePassword(password, user.password);
 
     if (!isPasswordValid) {
       return null;
     }
 
-    // Create user object without password
     const userWithoutPassword: UserWithoutPassword = {
       id: user.id,
       studentId: user.studentId,
@@ -90,7 +72,6 @@ export const authService = {
       updatedAt: user.updatedAt
     };
 
-    // Generate token
     const token = this.generateToken(userWithoutPassword);
 
     return {
@@ -99,9 +80,7 @@ export const authService = {
     };
   },
 
-  /**
-   * Register new user (if needed)
-   */
+  // Register new user
   async register(data: {
     studentId: string;
     email: string;
@@ -109,10 +88,8 @@ export const authService = {
     firstName: string;
     lastName: string;
   }): Promise<{ user: UserWithoutPassword; token: string }> {
-    // Hash password
     const hashedPassword = await this.hashPassword(data.password);
 
-    // Create user
     const user = await prisma.user.create({
       data: {
         studentId: data.studentId,
@@ -120,7 +97,7 @@ export const authService = {
         password: hashedPassword,
         firstName: data.firstName,
         lastName: data.lastName,
-        role: 'STUDENT' // Default role
+        role: 'STUDENT'
       },
       select: {
         id: true,
@@ -134,7 +111,6 @@ export const authService = {
       }
     });
 
-    // Generate token
     const token = this.generateToken(user);
 
     return { user, token };

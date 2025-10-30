@@ -3,9 +3,7 @@ import { PrismaClient } from '@prisma/client';
 const prisma = new PrismaClient();
 
 export const bookingService = {
-  /**
-   * Get all bookings (with optional filters)
-   */
+  // Get all bookings (with optional filters)
   async getAllBookings(filters?: { userId?: string; deviceId?: string }) {
     return await prisma.booking.findMany({
       where: {
@@ -16,18 +14,14 @@ export const bookingService = {
     });
   },
 
-  /**
-   * Get a single booking by ID
-   */
+  // Get a single booking by ID
   async getBookingById(id: string) {
     return await prisma.booking.findUnique({
       where: { id }
     });
   },
 
-  /**
-   * Create a new booking
-   */
+  // Create a new booking
   async createBooking(data: {
     userId: string;
     deviceId: string;
@@ -40,9 +34,7 @@ export const bookingService = {
     });
   },
 
-  /**
-   * Update a booking
-   */
+  // Update a booking
   async updateBooking(id: string, data: Partial<{
     start: Date;
     end: Date;
@@ -54,9 +46,7 @@ export const bookingService = {
     });
   },
 
-  /**
-   * Delete a booking
-   */
+  // Delete a booking
   async deleteBooking(id: string) {
     return await prisma.booking.delete({
       where: { id }

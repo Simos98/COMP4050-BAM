@@ -2,7 +2,7 @@ import { Request, Response, NextFunction } from 'express';
 import { authService } from '../services/authService';
 import { sendError } from '../utils/apiResponses';
 
-// Extend Request type to include user
+// Request type including user
 export interface AuthRequest extends Request {
   user?: {
     id: string;
@@ -11,12 +11,9 @@ export interface AuthRequest extends Request {
   };
 }
 
-/**
- * Middleware to verify JWT token and attach user to request
- */
+// Middleware to verify JWT token and attach user to request
 export const authenticate = (req: Request, res: Response, next: NextFunction): void => {
   try {
-    // Try Authorization header first
     const authHeader = req.headers.authorization;
     let token: string | undefined;
 
@@ -24,9 +21,7 @@ export const authenticate = (req: Request, res: Response, next: NextFunction): v
       token = authHeader.substring(7);
     }
 
-    // If no header token, try cookie (requires cookie-parser middleware)
     if (!token) {
-      // Type cast because express Request typing may not include cookies
       token = (req as any).cookies?.token;
     }
 
@@ -35,7 +30,6 @@ export const authenticate = (req: Request, res: Response, next: NextFunction): v
       return;
     }
 
-    // Verify token using authService helper
     const decoded = authService.verifyToken(token);
 
     if (!decoded) {
@@ -43,7 +37,6 @@ export const authenticate = (req: Request, res: Response, next: NextFunction): v
       return;
     }
 
-    // Attach user to request (keep fields optional in case not present)
     (req as AuthRequest).user = {
       id: (decoded as any).id,
       email: (decoded as any).email,

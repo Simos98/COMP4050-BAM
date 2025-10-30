@@ -3,23 +3,15 @@ import { UserWithoutPassword, userSelectWithoutPassword } from '../types/user';
 
 const prisma = new PrismaClient();
 
-// ========================================
-// User Service - All database operations
-// ========================================
-
 export const userService = {
-  /**
-   * Get all users (without passwords)
-   */
+  // Get all users (without passwords)
   async findAll(): Promise<UserWithoutPassword[]> {
     return await prisma.user.findMany({
       select: userSelectWithoutPassword
     });
   },
 
-  /**
-   * Get user by ID (without password)
-   */
+  // Get user by ID (without password)
   async findById(id: string): Promise<UserWithoutPassword | null> {
     return await prisma.user.findUnique({
       where: { id },
@@ -27,19 +19,14 @@ export const userService = {
     });
   },
 
-  /**
-   * Get user by email (with password - for authentication)
-   * This is the only method that returns the full User with password
-   */
+  // Get user by email (with password - for authentication)
   async findByEmail(email: string): Promise<User | null> {
     return await prisma.user.findUnique({
       where: { email }
     });
   },
 
-  /**
-   * Get user by student ID (without password)
-   */
+  // Get user by student ID (without password)
   async findByStudentId(studentId: string): Promise<UserWithoutPassword | null> {
     return await prisma.user.findUnique({
       where: { studentId },
@@ -47,9 +34,7 @@ export const userService = {
     });
   },
 
-  /**
-   * Create new user (returns without password)
-   */
+  // Create new user (returns without password)
   async create(data: {
     studentId: string;
     email: string;
@@ -62,7 +47,7 @@ export const userService = {
       data: {
         studentId: data.studentId,
         email: data.email,
-        password: data.password, // TODO: Hash before passing to service!
+        password: data.password,
         firstName: data.firstName,
         lastName: data.lastName,
         role: data.role || 'STUDENT'
@@ -71,9 +56,7 @@ export const userService = {
     });
   },
 
-  /**
-   * Update user (returns without password)
-   */
+  // Update user (returns without password)
   async update(
     id: string,
     data: {
@@ -89,9 +72,7 @@ export const userService = {
     });
   },
 
-  /**
-   * Delete user (returns without password)
-   */
+  // Delete user (returns without password)
   async delete(id: string): Promise<UserWithoutPassword> {
     return await prisma.user.delete({
       where: { id },
@@ -99,18 +80,14 @@ export const userService = {
     });
   },
 
-  /**
-   * Count users by role
-   */
+  // Count users by role
   async countByRole(role: UserRole): Promise<number> {
     return await prisma.user.count({
       where: { role }
     });
   },
 
-  /**
-   * Search users by name or email (without passwords)
-   */
+  // Search users by name or email (without passwords)
   async search(query: string): Promise<UserWithoutPassword[]> {
     return await prisma.user.findMany({
       where: {
