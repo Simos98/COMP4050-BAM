@@ -122,14 +122,48 @@ export default function Bookings() {
     }
   }
 
+  // helper: resolve owner display/studentId/email from different possible booking shapes
+  const resolveBookingOwner = (b: any): { display: string; studentId?: string; email?: string; id?: string } => {
+    // prefer backend-provided studentId
+    if (b.studentId) return { display: String(b.studentId), studentId: String(b.studentId) }
+    // relation/object shape
+    if (b.user && typeof b.user === 'object') {
+      const sid = b.user.studentId ?? b.user.studentID ?? b.user.student_id
+      if (sid) return { display: String(sid), studentId: String(sid) }
+      const email = (b.user.email ?? '').toString()
+      const id = (b.user.id ?? '').toString()
+      return { display: email || id || 'Unknown', email: email?.toLowerCase(), id }
+    }
+    // string email fallback
+    if (typeof b.user === 'string') return { display: b.user, email: b.user.toLowerCase() }
+    // userId fallback
+    if (b.userId) return { display: String(b.userId), id: String(b.userId) }
+    return { display: 'Unknown' }
+  }
+
   const visibleData = useMemo(() => {
     if (role === 'ADMIN') return data
     if (!user) return []
-    return data.filter(b => b.user === user.email)
+    return data.filter(b => {
+      const owner = resolveBookingOwner(b)
+      // prefer studentId compare if available, otherwise compare email or user id
+      if (owner.studentId && (user as any)?.studentId) return owner.studentId === String((user as any).studentId)
+      if (owner.email && user?.email) return owner.email === user.email.toLowerCase()
+      if (owner.id && (user as any).id) return String(owner.id) === String((user as any).id)
+      return owner.display === user.email
+    })
   }, [data, user, role])
 
   const columns: ColumnsType<Booking> = [
-    { title: 'User', dataIndex: 'user', key: 'user' },
+    {
+      title: 'Student ID',
+      dataIndex: 'studentId',
+      key: 'studentId',
+      render: (_, record) => {
+        const owner = resolveBookingOwner(record as any)
+        return owner.studentId ?? owner.display
+      }
+    },
     {
       title: 'Device',
       dataIndex: 'deviceId',
@@ -140,14 +174,7 @@ export default function Bookings() {
     { title: 'Start', dataIndex: 'start', key: 'start', render: (v) => dayjs(v).format('YYYY-MM-DD HH:mm') },
     { title: 'End', dataIndex: 'end', key: 'end', render: (v) => dayjs(v).format('YYYY-MM-DD HH:mm') },
     { title: 'Status', dataIndex: 'status', key: 'status',
-      filters: [
-        { text: 'Pending', value: 'pending' },
-        { text: 'Approved', value: 'approved' },
-        { text: 'Rejected', value: 'rejected' },
-        { text: 'Cancelled', value: 'cancelled' },
-      ],
-      onFilter: (val, record) => record.status === val,
-      render: (s: any) => <Tag color={STATUS_COLORS[s]}>{String(s).toUpperCase()}</Tag>
+      render: (s: any) => <Tag color={STATUS_COLORS[String(s ?? 'pending')]}>{String((s ?? 'pending')).toUpperCase()}</Tag>
     },
     {
       title: 'Actions',
