@@ -1,3 +1,4 @@
+import type { BookingStatus } from '../types'
 import { apiFetch } from './api'
 
 export type Booking = {
@@ -6,7 +7,7 @@ export type Booking = {
   deviceId: string
   start: string
   end: string
-  status: 'pending' | 'approved' | 'rejected' | 'cancelled'
+  status: BookingStatus
   notes?: string | null
   createdAt?: string
   updatedAt?: string
@@ -35,13 +36,13 @@ export async function createBooking(payload: BookingCreatePayload) {
   return body?.data?.booking ?? body?.booking ?? body
 }
 
-export async function updateBookingStatus(id: string, status: Booking['status']) {
-  const body = await apiFetch(`/api/bookings/${id}/status`, {
+export async function updateBookingStatus(id: string, status: string) {
+  const body = await apiFetch(`/api/bookings/${encodeURIComponent(id)}/status`, {
     method: 'PUT',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ status }),
+    body: JSON.stringify({ status })
   })
-  return body?.data?.booking ?? body?.booking ?? body
+  return body?.data?.booking
 }
 
 export async function deleteBooking(id: string) {

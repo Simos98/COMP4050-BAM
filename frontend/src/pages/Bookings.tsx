@@ -34,45 +34,21 @@ export default function Bookings() {
   const [open, setOpen] = useState(false)
   const [form] = Form.useForm()
 
-  // Disable dates before today
-  const disabledDate = (current: Dayjs | null) => {
-    if (!current) return false
-    return current.isBefore(dayjs(), 'day')
+  // Disable dates before today or fully-booked days for the selected device
+  const dateFullyBooked = (deviceId: string | undefined, date: Dayjs | null) => {
+    if (!deviceId || !date) return false
+    const bookedHours = getDisabledHoursForDate(deviceId, date)
+    return bookedHours.length >= 24
   }
 
-  // Disable times earlier than now for the current date
-  const disabledRangeTime = (current: Dayjs | null, type: 'start' | 'end') => {
-    if (!current) return {}
-    const now = dayjs()
-    // only restrict times when selecting today's date
-    if (!current.isSame(now, 'day')) {
-      return {
-        disabledHours: () => [],
-        disabledMinutes: () => [],
-        disabledSeconds: () => [],
-      }
-    }
-
-    const disabledHours = () => {
-      const arr: number[] = []
-      for (let h = 0; h < 24; h++) {
-        // disallow hours strictly before current hour
-        if (h < now.hour()) arr.push(h)
-      }
-      return arr
-    }
-
-    const disabledMinutes = (hour: number) => {
-      if (hour !== now.hour()) return []
-      // for the current hour, disable minutes strictly before current minute
-      return Array.from({ length: now.minute() }, (_, i) => i)
-    }
-
-    return {
-      disabledHours,
-      disabledMinutes,
-      disabledSeconds: () => [],
-    }
+  const disabledDate = (current: Dayjs | null) => {
+    if (!current) return false
+    // past dates
+    if (current.isBefore(dayjs(), 'day')) return true
+    // if device selected, disable days that are fully booked
+    const deviceId = form.getFieldValue('deviceId')
+    if (deviceId && dateFullyBooked(deviceId, current)) return true
+    return false
   }
 
   // helper: bookings for a given device (ignore cancelled/rejected)
@@ -103,19 +79,85 @@ export default function Bookings() {
     return disabled
   }
 
-  // disabledTime for RangePicker: disables hours that are already booked for the selected device
-  const rangeDisabledTime = (current: Dayjs | null, type: 'start' | 'end') => {
+  // For a given device, date and hour return minutes (0-59) that are taken by bookings.
+  const getDisabledMinutesForDateHour = (deviceId: string | undefined, date: Dayjs | null, hour: number) => {
+    if (!deviceId || !date) return [] as number[]
+    const bookingsForDevice = getBookingsForDevice(deviceId)
+    const minutesSet = new Set<number>()
+    const hourStart = date.hour(hour).minute(0).second(0)
+    const hourEnd = hourStart.add(1, 'hour')
+
+    for (const b of bookingsForDevice) {
+      const bs = dayjs(b.start)
+      const be = dayjs(b.end)
+      if (!(bs.isBefore(hourEnd) && be.isAfter(hourStart))) continue
+      // compute minute range within this hour that overlap the booking
+      const startMin = bs.isAfter(hourStart) ? bs.minute() : 0
+      // if booking end is inside this hour, disable minutes strictly less than end minute
+      // (so exact minute equal to end is allowed)
+      const endMin = be.isBefore(hourEnd) ? Math.max(0, be.minute() - 1) : 59
+      for (let m = startMin; m <= endMin; m++) minutesSet.add(m)
+    }
+    return Array.from(minutesSet).sort((a, b) => a - b)
+  }
+
+  // Combined disabledTime for RangePicker:
+  // - blocks any time in the past (for today's date)
+  // - blocks hours/minutes that overlap existing bookings for the selected device
+  // - for the "end" picker also prevents selecting times <= chosen start
+  const disabledTimeForRange = (current: Dayjs | null, type: 'start' | 'end') => {
     try {
-      const deviceId = form.getFieldValue('deviceId')
-      const disabledHours = getDisabledHoursForDate(deviceId, current)
-      return {
-        disabledHours: () => disabledHours,
-        disabledMinutes: (hour: number) => {
-          // optionally, disable all minutes for hours that are disabled
-          return disabledHours.includes(hour) ? Array.from({ length: 60 }, (_, i) => i) : []
-        },
-        disabledSeconds: () => []
+      if (!current) return {}
+      const now = dayjs()
+      const deviceId: string | undefined = form.getFieldValue('deviceId')
+      const bookedHours = getDisabledHoursForDate(deviceId, current)
+      const isToday = current.isSame(now, 'day')
+
+      // base: hours in the past (for today)
+      const pastHours = isToday ? Array.from({ length: now.hour() }, (_, i) => i) : []
+
+      // union of past + booked
+      const disabledHourSet = new Set<number>([...pastHours, ...bookedHours])
+
+      // if user is picking the "end" side and a start is already chosen, prevent selecting end <= start
+      const rangeVal: [Dayjs, Dayjs] | undefined = form.getFieldValue('range')
+      if (type === 'end' && rangeVal && rangeVal[0]) {
+        const startPick = dayjs(rangeVal[0])
+        // if end date is same day as start, block hours up to and including start.hour()
+        if (current.isSame(startPick, 'day')) {
+          for (let h = 0; h <= startPick.hour(); h++) disabledHourSet.add(h)
+        } else {
+          // if end day is before start day (shouldn't happen because disabledDate prevents past),
+          // just block entire day
+        }
       }
+
+      const disabledHours = () => Array.from(disabledHourSet).sort((a, b) => a - b)
+
+      const disabledMinutes = (hour: number) => {
+        // minutes that are already booked within this hour
+        const bookedMins = getDisabledMinutesForDateHour(deviceId, current, hour)
+        if (bookedMins.length >= 60) return Array.from({ length: 60 }, (_, i) => i)
+
+        // if selecting today's current hour, disable minutes before now
+        const pastMins = (isToday && hour === now.hour()) ? Array.from({ length: now.minute() }, (_, i) => i) : []
+
+        // if end picker and start is on same day and hour, disable minutes <= start.minute()
+        let startBlocked: number[] = []
+        if (type === 'end' && rangeVal && rangeVal[0] && current.isSame(dayjs(rangeVal[0]), 'day')) {
+          const startPick = dayjs(rangeVal[0])
+          if (hour === startPick.hour()) {
+            startBlocked = Array.from({ length: startPick.minute() + 1 }, (_, i) => i)
+          }
+        }
+
+        const merged = new Set<number>([...bookedMins, ...pastMins, ...startBlocked])
+        return Array.from(merged).sort((a, b) => a - b)
+      }
+
+      const disabledSeconds = () => []
+
+      return { disabledHours, disabledMinutes, disabledSeconds }
     } catch {
       return {}
     }
@@ -164,6 +206,21 @@ export default function Bookings() {
       const values = await form.validateFields()
       const range: [Dayjs, Dayjs] = values.range
       const owner = (values.user ?? user?.email ?? '').toString().toLowerCase()
+
+      // additional client-side check for overlap before sending to backend
+      const deviceId = values.deviceId
+      const bookingsForDevice = getBookingsForDevice(deviceId)
+      const newStart = dayjs(range[0])
+      const newEnd = dayjs(range[1])
+      const conflict = bookingsForDevice.find(b => {
+        const bs = dayjs(b.start)
+        const be = dayjs(b.end)
+        return bs.isBefore(newEnd) && be.isAfter(newStart)
+      })
+      if (conflict) {
+        message.error('Selected device is already booked for that time range')
+        return
+      }
 
       await createBooking({
         user: owner,
@@ -245,7 +302,9 @@ export default function Bookings() {
     })
   }, [data, user, role])
 
-  const columns: ColumnsType<Booking> = [
+  const showActions = role !== 'STUDENT'
+
+  const baseColumns: ColumnsType<Booking> = [
     {
       title: 'Student ID',
       dataIndex: 'studentId',
@@ -267,33 +326,35 @@ export default function Bookings() {
     { title: 'Status', dataIndex: 'status', key: 'status',
       render: (s: any) => <Tag color={STATUS_COLORS[String(s ?? 'pending')]}>{String((s ?? 'pending')).toUpperCase()}</Tag>
     },
-    {
-      title: 'Actions',
-      key: 'actions',
-      render: (_, record) => {
-        // only admins can approve/delete bookings
-        if (!isAdmin) return null
-
-        const alreadyApproved = String(record.status ?? '').toLowerCase() === 'approved'
-        return (
-          <Space>
-            <Button
-              size="small"
-              type="primary"
-              onClick={() => handleStatus(record.id, 'approved')}
-              disabled={alreadyApproved}
-            >
-              Approve
-            </Button>
-
-            <Popconfirm title="Delete booking?" onConfirm={() => handleDelete(record.id)}>
-              <Button size="small" danger type="text">Delete</Button>
-            </Popconfirm>
-          </Space>
-        )
-      }
-    }
   ]
+
+  const actionsColumn = {
+    title: 'Actions',
+    key: 'actions',
+    render: (_: any, record: Booking) => {
+      // only show actionable buttons to admins (column itself hidden for students)
+      if (!isAdmin) return null
+      const alreadyApproved = String(record.status ?? '').toLowerCase() === 'approved'
+      return (
+        <Space>
+          <Button
+            size="small"
+            type="primary"
+            onClick={() => handleStatus(record.id, 'approved')}
+            disabled={alreadyApproved}
+          >
+            Approve
+          </Button>
+
+          <Popconfirm title="Delete booking?" onConfirm={() => handleDelete(record.id)}>
+            <Button size="small" danger type="text">Delete</Button>
+          </Popconfirm>
+        </Space>
+      )
+    }
+  }
+
+  const columns = showActions ? [...baseColumns, actionsColumn] : baseColumns
 
   return (
     <Card title="Bookings" extra={<Button type="primary" onClick={() => setOpen(true)} disabled={devices.length === 0}>Create Booking</Button>}>
@@ -321,7 +382,7 @@ export default function Bookings() {
               showTime
               format="YYYY-MM-DD HH:mm"
               disabledDate={disabledDate}
-              disabledTime={disabledRangeTime}
+              disabledTime={disabledTimeForRange}
             />
           </Form.Item>
 
