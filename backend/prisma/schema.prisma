@@ -1,14 +1,6 @@
 // This is your Prisma schema file,
 // learn more about it in the docs: https://pris.ly/d/prisma-schema
 
-// Push to database with: npx prismaa db push - DONT USE UNLESS YOU KNOW WHAT YOU ARE DOING
-// Generate Prisma client with: npx prisma generate - DONT USE UNLESS YOU KNOW WHAT YOU ARE DOING
-// View through web interface with: npx prisma studio
-// Web Based PostgreSQL Manager: docker-compose up -d pgadmin
-    // Access: http://localhost:5050
-    // Login : admin@comp4050.com
-    // Password: admin123
-
 generator client {
   provider = "prisma-client-js"
   // comment out or remove this line if it exists:
@@ -57,6 +49,9 @@ model Booking {
   start     DateTime @map("start")                // Start time
   end       DateTime @map("end")                  // End time
   notes     String?  @map("notes")                // Notes
+
+  // new status field
+  status    BookingStatus @default(PENDING) @map("status")
   
   // Relationships
   images    Image[]                                // List of images for this booking
@@ -93,6 +88,11 @@ model Image {
   
   @@map("images") // Table name in database will be "images"
   @@index([bookingId]) // Index for faster queries
+}
+
+enum BookingStatus {
+  PENDING
+  APPROVED
 }
 
 enum UserRole {

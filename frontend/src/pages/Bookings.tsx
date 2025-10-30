@@ -34,6 +34,93 @@ export default function Bookings() {
   const [open, setOpen] = useState(false)
   const [form] = Form.useForm()
 
+  // Disable dates before today
+  const disabledDate = (current: Dayjs | null) => {
+    if (!current) return false
+    return current.isBefore(dayjs(), 'day')
+  }
+
+  // Disable times earlier than now for the current date
+  const disabledRangeTime = (current: Dayjs | null, type: 'start' | 'end') => {
+    if (!current) return {}
+    const now = dayjs()
+    // only restrict times when selecting today's date
+    if (!current.isSame(now, 'day')) {
+      return {
+        disabledHours: () => [],
+        disabledMinutes: () => [],
+        disabledSeconds: () => [],
+      }
+    }
+
+    const disabledHours = () => {
+      const arr: number[] = []
+      for (let h = 0; h < 24; h++) {
+        // disallow hours strictly before current hour
+        if (h < now.hour()) arr.push(h)
+      }
+      return arr
+    }
+
+    const disabledMinutes = (hour: number) => {
+      if (hour !== now.hour()) return []
+      // for the current hour, disable minutes strictly before current minute
+      return Array.from({ length: now.minute() }, (_, i) => i)
+    }
+
+    return {
+      disabledHours,
+      disabledMinutes,
+      disabledSeconds: () => [],
+    }
+  }
+
+  // helper: bookings for a given device (ignore cancelled/rejected)
+  const getBookingsForDevice = (deviceId?: string) => {
+    if (!deviceId) return [] as Booking[]
+    return data.filter(b => {
+      if (b.deviceId !== deviceId) return false
+      const st = String((b as any).status ?? '').toLowerCase()
+      return st !== 'cancelled' && st !== 'rejected'
+    })
+  }
+
+  // For a given device and date, return hours (0-23) that overlap existing bookings.
+  const getDisabledHoursForDate = (deviceId: string | undefined, date: Dayjs | null) => {
+    if (!deviceId || !date) return [] as number[]
+    const bookingsForDevice = getBookingsForDevice(deviceId)
+    const disabled: number[] = []
+    for (let h = 0; h < 24; h++) {
+      const hourStart = date.hour(h).minute(0).second(0)
+      const hourEnd = hourStart.add(1, 'hour')
+      const overlaps = bookingsForDevice.some(b => {
+        const bs = dayjs(b.start)
+        const be = dayjs(b.end)
+        return bs.isBefore(hourEnd) && be.isAfter(hourStart)
+      })
+      if (overlaps) disabled.push(h)
+    }
+    return disabled
+  }
+
+  // disabledTime for RangePicker: disables hours that are already booked for the selected device
+  const rangeDisabledTime = (current: Dayjs | null, type: 'start' | 'end') => {
+    try {
+      const deviceId = form.getFieldValue('deviceId')
+      const disabledHours = getDisabledHoursForDate(deviceId, current)
+      return {
+        disabledHours: () => disabledHours,
+        disabledMinutes: (hour: number) => {
+          // optionally, disable all minutes for hours that are disabled
+          return disabledHours.includes(hour) ? Array.from({ length: 60 }, (_, i) => i) : []
+        },
+        disabledSeconds: () => []
+      }
+    } catch {
+      return {}
+    }
+  }
+
   const load = async () => {
     setLoading(true)
     try {
@@ -92,6 +179,10 @@ export default function Bookings() {
     } catch (err: any) {
       const status = err?.status ?? err?.response?.status
       if (status === 401) { await logout(); navigate('/login'); return }
+      if (status === 409) {
+        message.error('Selected device is already booked for that time range')
+        return
+      }
       if (status === 403) message.error('Forbidden: insufficient permissions')
       else if (status === 404) message.error('Target user or device not found')
       else message.error(err?.message || 'Failed to create booking')
@@ -180,20 +271,24 @@ export default function Bookings() {
       title: 'Actions',
       key: 'actions',
       render: (_, record) => {
-        const isOwner = user && record.user === user.email
-        const canCancel = (role === 'ADMIN' || isOwner) && record.status !== 'cancelled'
+        // only admins can approve/delete bookings
+        if (!isAdmin) return null
+
+        const alreadyApproved = String(record.status ?? '').toLowerCase() === 'approved'
         return (
           <Space>
-            {role === 'ADMIN' ? (
-              <>
-                <Button size="small" onClick={() => handleStatus(record.id, 'approved')} disabled={record.status === 'approved'}>Approve</Button>
-                <Button size="small" danger onClick={() => handleStatus(record.id, 'rejected')} disabled={record.status === 'rejected'}>Reject</Button>
-                <Button size="small" onClick={() => handleStatus(record.id, 'cancelled')} disabled={record.status === 'cancelled'}>Cancel</Button>
-                <Popconfirm title="Delete booking?" onConfirm={() => handleDelete(record.id)}><Button size="small" danger type="text">Delete</Button></Popconfirm>
-              </>
-            ) : (
-              <Button size="small" onClick={() => handleStatus(record.id, 'cancelled')} disabled={!canCancel}>Cancel</Button>
-            )}
+            <Button
+              size="small"
+              type="primary"
+              onClick={() => handleStatus(record.id, 'approved')}
+              disabled={alreadyApproved}
+            >
+              Approve
+            </Button>
+
+            <Popconfirm title="Delete booking?" onConfirm={() => handleDelete(record.id)}>
+              <Button size="small" danger type="text">Delete</Button>
+            </Popconfirm>
           </Space>
         )
       }
@@ -222,7 +317,12 @@ export default function Bookings() {
           </Form.Item>
 
           <Form.Item label="Time Range" name="range" rules={[{ required: true }]}>
-            <RangePicker showTime format="YYYY-MM-DD HH:mm" />
+            <RangePicker
+              showTime
+              format="YYYY-MM-DD HH:mm"
+              disabledDate={disabledDate}
+              disabledTime={disabledRangeTime}
+            />
           </Form.Item>
 
           <Form.Item label="Notes" name="notes"><Input.TextArea rows={3} placeholder="Optional context…" /></Form.Item>

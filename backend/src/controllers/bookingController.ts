@@ -24,23 +24,38 @@ export const getAllBookings = async (req: Request, res: Response) => {
 export const createBooking = async (req: Request, res: Response) => {
   try {
     const authUser = (req as any).user
-    const { userId, deviceId, start, end, notes, userEmail } = req.body
+    // accept { userId } OR { userEmail } OR { user } (email string)
+    const { userId, user: userField, userEmail, deviceId, start, end, notes, status } = req.body
+    const ownerEmail = (userEmail ?? userField) ? String(userEmail ?? userField).toLowerCase() : undefined
+    const ownerId = userId ?? authUser?.id
 
-    // determine owner: if request supplies userId and caller is admin allow it, otherwise use authenticated user id
-    let ownerId = userId ?? authUser?.id
-
-    // if userEmail provided and no ownerId, try to resolve
-    if (!ownerId && userEmail) {
-      const u = await (req as any).prisma?.user?.findUnique?.({ where: { email: userEmail.toLowerCase() } })
-      ownerId = u?.id
+    if (!ownerId && !ownerEmail) {
+      return sendError(res, 'userId (or authenticated session) or userEmail is required', 400)
+    }
+    if (!deviceId || !start || !end) {
+      return sendError(res, 'deviceId, start and end are required', 400)
     }
 
-    if (!ownerId || !deviceId || !start || !end) {
-      return sendError(res, 'userId (or authenticated session), deviceId, start and end are required', 400)
+    // Validate start/end are valid dates and not in the past
+    const startDate = new Date(start)
+    const endDate = new Date(end)
+    const now = new Date()
+    if (isNaN(startDate.getTime()) || isNaN(endDate.getTime())) {
+      return sendError(res, 'Invalid start or end date', 400)
+    }
+    if (startDate <= now) {
+      return sendError(res, 'Start time must be in the future', 400)
+    }
+    if (endDate <= now) {
+      return sendError(res, 'End time must be in the future', 400)
+    }
+    if (startDate >= endDate) {
+      return sendError(res, 'Start must be before end', 400)
     }
 
     const created = await bookingService.create({
       userId: ownerId,
+      userEmail: ownerEmail,
       deviceId,
       start,
       end,
@@ -48,8 +63,15 @@ export const createBooking = async (req: Request, res: Response) => {
     })
 
     sendSuccess(res, { booking: created }, 'Booking created')
-  } catch (err) {
+  } catch (err: any) {
     console.error('createBooking error', err)
+    // surface conflict as 409
+    if (err?.status === 409) {
+      return sendError(res, err.message || 'Booking time conflict', 409)
+    }
+    if (err?.status === 400) {
+      return sendError(res, err.message || 'Invalid request', 400)
+    }
     sendError(res, 'Could not create booking', 500)
   }
 }
