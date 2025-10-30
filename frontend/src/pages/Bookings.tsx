@@ -218,7 +218,7 @@ export default function Bookings() {
           <Form.Item label="Device" name="deviceId" rules={[{ required: true }]}>
             <Select
               placeholder="Select device"
-              options={devices.map(d => ({ label: `${d.deviceId} (${d.lab})`, value: d.deviceId }))}
+              options={devices.map(d => ({ label: `${d.model} (${d.location})`, value: d.id }))}
             />
           </Form.Item>
 

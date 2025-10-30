@@ -23,6 +23,8 @@ export async function getDevice(idOrDeviceId: string): Promise<DeviceRecord | nu
     if (err?.status === 404) return null
     throw err
   }
+  mockDevices.push(newDevice)
+  return newDevice
 }
 
 export async function createDevice(payload: { deviceId: string; lab: string; ip: string; port: number }) {
