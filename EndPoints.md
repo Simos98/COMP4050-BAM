@@ -63,3 +63,32 @@ This document defines all REST API endpoints used by the frontend.
 
 ---
 
+## Motor Control
+
+| Method | Endpoint | Description | Request Body | Response |
+|--------|-----------|--------------|---------------|-----------|
+| POST | `/api/motor/move-x` | Move X motor | `{ "amount": 10 }` | `{ "success": true, "message": "X motor moved 10 steps", "data": {...} }` |
+| POST | `/api/motor/move-y` | Move Y motor | `{ "amount": 5 }` | `{ "success": true, "message": "Y motor moved 5 steps", "data": {...} }` |
+| POST | `/api/motor/zoom-in` | Zoom in (fine adjustment) | `{ "amount": 3 }` | `{ "success": true, "message": "Zoomed in 3 steps", "data": {...} }` |
+| POST | `/api/motor/zoom-out` | Zoom out (fine adjustment) | `{ "amount": 2 }` | `{ "success": true, "message": "Zoomed out 2 steps", "data": {...} }` |
+| POST | `/api/motor/command` | Generic command endpoint | `{ "command": "move_x", "amount": 1 }` | `{ "success": true, "message": "X motor moved 1 steps", "data": {...} }` |
+
+### Motor Command Parameters
+
+| Parameter | Type | Required | Default | Description |
+|-----------|------|----------|---------|-------------|
+| `command` | string | Yes (for `/api/motor/command`) | - | One of: `move_x`, `move_y`, `zoom_in_fine`, `zoom_out_fine` |
+| `amount` | integer | No | 1 | Number of steps to move (must be >= 1) |
+
+### Environment Variables for Motor Controller
+
+Add these to your `.env` file:
+
+```
+# Motor Controller Configuration
+MOTOR_CONTROLLER_IP=192.168.1.100  # IP address of the motor controller
+MOTOR_CONTROLLER_PORT=8080         # Port of the motor controller
+```
+
+---
+
