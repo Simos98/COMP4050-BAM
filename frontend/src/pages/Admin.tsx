@@ -144,8 +144,31 @@ export default function Admin() {
     }
   ]
 
+  // helper: resolve owner display/studentId/email from different possible booking shapes
+  const resolveBookingOwner = (b: any): { display: string; studentId?: string; email?: string; id?: string } => {
+    if (!b) return { display: 'Unknown' }
+    // prefer backend-provided studentId
+    if (b.studentId) return { display: String(b.studentId), studentId: String(b.studentId) }
+    // relation/object shape
+    if (b.user && typeof b.user === 'object') {
+      const sid = b.user.studentId ?? b.user.studentID ?? b.user.student_id
+      if (sid) return { display: String(sid), studentId: String(sid) }
+      const email = (b.user.email ?? '').toString()
+      const id = (b.user.id ?? '').toString()
+      return { display: email || id || 'Unknown', email: email?.toLowerCase(), id }
+    }
+    // string email fallback
+    if (typeof b.user === 'string') return { display: b.user, email: b.user.toLowerCase() }
+    // userId fallback
+    if (b.userId) return { display: String(b.userId), id: String(b.userId) }
+    return { display: 'Unknown' }
+  }
+
   const bookingsColumns: ColumnsType<Booking> = [
-    { title: 'User', dataIndex: 'user', key: 'user', render: (_, r) => (r.user ?? (r as any).studentId ?? 'Unknown') },
+    { title: 'User', dataIndex: 'user', key: 'user', render: (_, r) => {
+      const owner = resolveBookingOwner(r as any)
+      return owner.studentId ?? owner.display
+    } },
     { title: 'Device', dataIndex: 'deviceId', key: 'deviceId' },
     { title: 'Start', dataIndex: 'start', key: 'start', render: (v) => dayjs(v).format('YYYY-MM-DD HH:mm') },
     { title: 'End', dataIndex: 'end', key: 'end', render: (v) => dayjs(v).format('YYYY-MM-DD HH:mm') },
