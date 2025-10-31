@@ -1,4 +1,4 @@
-import net from 'net';
+import * as net from 'net';
 import { config } from 'dotenv';
 
 config();
