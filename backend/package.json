@@ -15,6 +15,7 @@
     "db:seed": "tsx prisma/seed.ts",
     "test:database": "tsx tests/test-database.ts",
     "motor:mock": "tsx tests/mock-motor-controller.ts",
+    "motor:mock:http": "tsx tests/mock-motor-controller-http.ts",
     "motor:test": "tsx tests/test-motor-endpoints.ts"
   },
   "keywords": [

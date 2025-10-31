@@ -1,4 +1,4 @@
-import * as net from 'net';
+import axios from 'axios';
 import { config } from 'dotenv';
 
 config();
@@ -6,6 +6,7 @@ config();
 // Get IP and port from environment variables with defaults
 const MOTOR_CONTROLLER_IP = process.env.MOTOR_CONTROLLER_IP || '192.168.1.100';
 const MOTOR_CONTROLLER_PORT = parseInt(process.env.MOTOR_CONTROLLER_PORT || '8080');
+const MOTOR_CONTROLLER_URL = `http://${MOTOR_CONTROLLER_IP}:${MOTOR_CONTROLLER_PORT}/send_command/`;
 
 export interface MotorCommand {
   command: 'move_x' | 'move_y' | 'zoom_in_fine' | 'zoom_out_fine';
@@ -26,77 +27,64 @@ export class MotorService {
    * @returns Promise with the response
    */
   static async sendCommand(command: MotorCommand): Promise<MotorResponse> {
-    return new Promise((resolve, reject) => {
+    try {
       // Default amount to 1 if not provided
       const commandToSend: MotorCommand = {
         command: command.command,
         amount: command.amount ?? 1
       };
 
-      // Create a client socket
-      const client = new net.Socket();
+      console.log(`Sending command to motor controller at ${MOTOR_CONTROLLER_URL}`);
+      console.log('Command:', commandToSend);
+
+      // Send HTTP POST request to motor controller
+      const response = await axios.post(MOTOR_CONTROLLER_URL, commandToSend, {
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        timeout: 5000 // 5 second timeout
+      });
+
+      console.log('Received response:', response.data);
+
+      // Return success response
+      return {
+        success: true,
+        message: 'Command executed successfully',
+        command: commandToSend,
+        ...response.data
+      };
+
+    } catch (error: any) {
+      console.error('Motor controller error:', error.message);
       
-      // Set timeout for connection
-      const timeout = setTimeout(() => {
-        client.destroy();
-        resolve({
+      if (error.code === 'ECONNREFUSED') {
+        return {
+          success: false,
+          message: 'Connection refused',
+          error: `Cannot connect to motor controller at ${MOTOR_CONTROLLER_URL}`
+        };
+      } else if (error.code === 'ETIMEDOUT') {
+        return {
           success: false,
           message: 'Connection timeout',
-          error: `Failed to connect to ${MOTOR_CONTROLLER_IP}:${MOTOR_CONTROLLER_PORT}`
-        });
-      }, 5000); // 5 second timeout
-
-      // Connect to the motor controller
-      client.connect(MOTOR_CONTROLLER_PORT, MOTOR_CONTROLLER_IP, () => {
-        clearTimeout(timeout);
-        console.log(`Connected to motor controller at ${MOTOR_CONTROLLER_IP}:${MOTOR_CONTROLLER_PORT}`);
-        
-        // Send the command as JSON string
-        const commandString = JSON.stringify(commandToSend);
-        client.write(commandString);
-      });
-
-      // Handle response data
-      client.on('data', (data) => {
-        console.log('Received response:', data.toString());
-        client.destroy(); // Close connection after receiving response
-        
-        try {
-          // Try to parse response as JSON
-          const response = JSON.parse(data.toString());
-          resolve({
-            success: true,
-            message: 'Command executed successfully',
-            command: commandToSend,
-            ...response
-          });
-        } catch (error) {
-          // If response is not JSON, return as plain text
-          resolve({
-            success: true,
-            message: data.toString(),
-            command: commandToSend
-          });
-        }
-      });
-
-      // Handle errors
-      client.on('error', (error) => {
-        clearTimeout(timeout);
-        console.error('Motor controller connection error:', error);
-        resolve({
+          error: `Motor controller did not respond within 5 seconds`
+        };
+      } else if (error.response) {
+        // The motor controller responded with an error status
+        return {
           success: false,
-          message: 'Connection error',
+          message: `Motor controller error: ${error.response.status}`,
+          error: error.response.data || 'Unknown error'
+        };
+      } else {
+        return {
+          success: false,
+          message: 'Request failed',
           error: error.message
-        });
-      });
-
-      // Handle connection close
-      client.on('close', () => {
-        clearTimeout(timeout);
-        console.log('Connection to motor controller closed');
-      });
-    });
+        };
+      }
+    }
   }
 
   /**
