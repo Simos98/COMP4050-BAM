@@ -71,7 +71,19 @@ BioScope is a laboratory equipment management system enabling users to book and 
 - [x] Admin approval workflow
 - [x] Conflict prevention
 - [x] Booking history
-- [x] Status updates
+- [x] Status updates (pending, approved, rejected, cancelled)
+- [x] Admin override for device control
+
+### 4.4 Motor Control System
+- [x] X-axis movement
+- [x] Y-axis movement
+- [x] Zoom control
+- [x] Position reset
+- [x] Real-time camera preview
+- [x] Authorization rules:
+  - Admins can control devices regardless of booking status
+  - Users require approved booking to control devices
+- [x] Position tracking (x, y, zoom coordinates)
 
 ## 5. Technical Requirements
 
@@ -149,11 +161,23 @@ model Booking {
 - GET `/api/devices/check-availability`
 
 ### 7.3 Bookings
-- GET `/api/bookings`
-- POST `/api/bookings`
-- GET `/api/bookings/:id`
-- PATCH `/api/bookings/:id/status`
-- DELETE `/api/bookings/:id`
+- GET `/api/bookings` - List all bookings (filtered by user role)
+- POST `/api/bookings` - Create new booking
+- GET `/api/bookings/:id` - Get booking details
+- PUT `/api/bookings/:id/status` - Update booking status (admin only)
+- DELETE `/api/bookings/:id` - Delete booking (owner or admin)
+
+### 7.4 Motor Control
+- POST `/api/motor/move-x` - Move X axis
+  - Body: { deviceId: string, amount: number, bookingId?: string }
+- POST `/api/motor/move-y` - Move Y axis
+  - Body: { deviceId: string, amount: number, bookingId?: string }
+- POST `/api/motor/zoom` - Control zoom
+  - Body: { deviceId: string, amount: number, bookingId?: string }
+- POST `/api/motor/reset` - Reset position
+  - Body: { deviceId: string, bookingId?: string }
+- GET `/api/motor/preview` - Get camera preview
+  - Query: deviceId, bookingId?
 
 ## 8. Security Requirements
 - HTTPS encryption
@@ -163,6 +187,9 @@ model Booking {
 - CSRF protection
 - Input validation
 - Rate limiting
+- Role-based access control for motor operations
+- Booking status validation for device control
+- Admin override capabilities
 
 ## 9. Performance Requirements
 - Page load time < 2s
@@ -236,7 +263,3 @@ frontend/
 - Feature updates
 - User feedback implementation
 
----
-
-*Last Updated: October 31, 2023*  
-*Version: 1.0.0*
