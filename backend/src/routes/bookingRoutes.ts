@@ -1,8 +1,9 @@
 import { Router } from 'express'
-import { getAllBookings, createBooking, updateBookingStatus, deleteBooking } from '../controllers/bookingController'
+import { getAllBookings, createBooking, updateBookingStatus, deleteBooking, getBookingById } from '../controllers/bookingController'
 import { authenticate } from '../middleware/authMiddleware'
 import { authorizeBookingOwner } from '../middleware/authorizeBookingOwner'
 import { authorizeAdmin } from '../middleware/authorizeAdmin'
+import { get } from 'http'
 
 const router = Router()
 
@@ -12,5 +13,6 @@ router.post('/', authenticate, createBooking)
 router.put('/:id/status', authenticate, authorizeAdmin, updateBookingStatus)
 // delete: owner or admin
 router.delete('/:id', authenticate, authorizeBookingOwner, deleteBooking)
+router.get('/:id', getBookingById)
 
 export default router
