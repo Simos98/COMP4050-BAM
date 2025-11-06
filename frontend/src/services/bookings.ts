@@ -36,13 +36,13 @@ export async function createBooking(payload: BookingCreatePayload) {
   return body?.data?.booking ?? body?.booking ?? body
 }
 
-export async function updateBookingStatus(id: string, status: string) {
-  const body = await apiFetch(`/api/bookings/${encodeURIComponent(id)}/status`, {
+export async function updateBookingStatus(id: string, status: Booking['status']) {
+  // backend currently exposes PUT /api/bookings/:id/status
+  return apiFetch(`/api/bookings/${encodeURIComponent(id)}/status`, {
     method: 'PUT',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ status })
+    body: JSON.stringify({ status: String(status).toLowerCase() }),
   })
-  return body?.data?.booking
 }
 
 export async function deleteBooking(id: string) {

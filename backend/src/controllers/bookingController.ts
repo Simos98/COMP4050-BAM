@@ -99,3 +99,19 @@ export const deleteBooking = async (req: Request, res: Response) => {
     sendError(res, 'Could not delete booking', 500)
   }
 }
+
+export const getBookingById = async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params
+    const booking = await bookingService.findById(id)
+
+    if (!booking) {
+      return sendError(res, 'Booking not found', 404)
+    }
+
+    return sendSuccess(res, { booking })
+  } catch (err) {
+    console.error('getBookingById error:', err)
+    return sendError(res, 'Could not fetch booking', 500)
+  }
+}

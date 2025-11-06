@@ -248,8 +248,10 @@ export default function Bookings() {
 
   const handleStatus = async (id: string, status: Booking['status']) => {
     try {
-      await updateBookingStatus(id, status)
-      message.success(`Marked as ${status}`)
+      // normalize to lowercase before sending
+      const normalized = String(status).toLowerCase() as Booking['status']
+      await updateBookingStatus(id, normalized)
+      message.success(`Marked as ${normalized}`)
       void load()
     } catch (err: any) {
       const statusCode = err?.status ?? err?.response?.status
